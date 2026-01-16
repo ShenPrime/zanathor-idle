@@ -22,6 +22,8 @@ import * as helpCommand from './commands/help.js';
 import * as grindCommand from './commands/grind.js';
 import * as notifyCommand from './commands/notify.js';
 import * as nerdstatsCommand from './commands/nerdstats.js';
+import * as battleCommand from './commands/battle.js';
+import * as battlesCommand from './commands/battles.js';
 
 // Import jobs
 import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
@@ -56,6 +58,8 @@ const commands = [
   grindCommand,
   notifyCommand,
   nerdstatsCommand,
+  battleCommand,
+  battlesCommand,
 ];
 
 // Register commands in collection
@@ -217,6 +221,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await interaction.update({
             content: 'There was an error. Please use /buy to try again.',
             components: [],
+          });
+        }
+      }
+    }
+    
+    // Battle counter-attack button
+    if (interaction.customId.startsWith('battle_counter:')) {
+      try {
+        await battleCommand.handleCounterAttack(interaction);
+      } catch (error) {
+        console.error('Error handling counter-attack button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error processing the counter-attack. Please use /battle to try again.',
+            flags: MessageFlags.Ephemeral,
           });
         }
       }

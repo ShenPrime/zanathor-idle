@@ -93,6 +93,43 @@ const migrations = [
       ALTER TABLE guilds ADD COLUMN IF NOT EXISTS peak_gold_balance BIGINT DEFAULT 0;
     `,
   },
+  {
+    name: '004_battle_system',
+    sql: `
+      -- Battles table to track battle history
+      CREATE TABLE IF NOT EXISTS battles (
+        id SERIAL PRIMARY KEY,
+        attacker_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        defender_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        bet_amount BIGINT NOT NULL,
+        winner_id INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+        gold_transferred BIGINT NOT NULL,
+        xp_transferred BIGINT NOT NULL,
+        attacker_power DECIMAL(10,2) NOT NULL,
+        defender_power DECIMAL(10,2) NOT NULL,
+        win_chance DECIMAL(5,2) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      -- Index for looking up battles by participant
+      CREATE INDEX IF NOT EXISTS idx_battles_attacker ON battles(attacker_id);
+      CREATE INDEX IF NOT EXISTS idx_battles_defender ON battles(defender_id);
+      CREATE INDEX IF NOT EXISTS idx_battles_created ON battles(created_at DESC);
+
+      -- Battle cooldown tracking on guilds
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS last_battle_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS battles_today INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS last_battle_reset DATE;
+
+      -- Battle lifetime stats
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battles_won INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battles_lost INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battle_gold_won BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battle_gold_lost BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battle_xp_won BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battle_xp_lost BIGINT DEFAULT 0;
+    `,
+  },
 ];
 
 async function migrate() {

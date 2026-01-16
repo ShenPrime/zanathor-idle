@@ -35,6 +35,15 @@ export async function execute(interaction) {
         inline: false,
       },
       {
+        name: 'PvP Battles',
+        value:
+          '`/battle user:@player bet:amount` - Battle another player\n' +
+          '`/battle random:true bet:amount` - Battle a random player\n' +
+          '`/battles` - View your recent battle history\n\n' +
+          '*Win to claim gold and XP from your opponent!*',
+        inline: false,
+      },
+      {
         name: 'How It Works',
         value:
           'Your adventurers automatically generate **gold** and **XP** over time.\n\n' +

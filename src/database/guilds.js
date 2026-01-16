@@ -209,6 +209,12 @@ export async function incrementStats(id, stats) {
     'lifetime_grind_sessions',
     'lifetime_grind_gold',
     'lifetime_adventurers_recruited',
+    'lifetime_battles_won',
+    'lifetime_battles_lost',
+    'lifetime_battle_gold_won',
+    'lifetime_battle_gold_lost',
+    'lifetime_battle_xp_won',
+    'lifetime_battle_xp_lost',
   ];
   
   // Build SET clause dynamically

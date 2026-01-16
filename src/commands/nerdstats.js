@@ -74,6 +74,25 @@ export async function execute(interaction) {
         inline: false,
       },
       {
+        name: 'BATTLE RECORD',
+        value: (() => {
+          const wins = guild.lifetime_battles_won || 0;
+          const losses = guild.lifetime_battles_lost || 0;
+          const total = wins + losses;
+          const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+          return [
+            `Battles Won: **${formatNumber(wins)}**`,
+            `Battles Lost: **${formatNumber(losses)}**`,
+            `Win Rate: **${winRate}%**`,
+            `Gold Looted: **${formatNumber(guild.lifetime_battle_gold_won || 0)}**`,
+            `Gold Lost: **${formatNumber(guild.lifetime_battle_gold_lost || 0)}**`,
+            `XP Looted: **${formatNumber(guild.lifetime_battle_xp_won || 0)}**`,
+            `XP Lost: **${formatNumber(guild.lifetime_battle_xp_lost || 0)}**`,
+          ].join('\n');
+        })(),
+        inline: false,
+      },
+      {
         name: 'TIME',
         value: [
           `Guild Founded: **${createdDateText}**`,
