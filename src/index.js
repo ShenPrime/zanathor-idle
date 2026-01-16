@@ -400,6 +400,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Leaderboard category buttons
+    if (interaction.customId.startsWith('leaderboard:')) {
+      try {
+        await leaderboardCommand.handleLeaderboardButton(interaction);
+      } catch (error) {
+        console.error('Error handling leaderboard button:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please try /leaderboard again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
   }
 });
 

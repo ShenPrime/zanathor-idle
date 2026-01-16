@@ -131,19 +131,20 @@ export async function updateAdventurerCapacity(id, capacity) {
 
 /**
  * Get leaderboard by a specific field
- * @param {string} field - Field to sort by (gold, level, adventurer_count)
+ * @param {string} field - Field to sort by (gold, level, adventurer_count, lifetime_gold_earned, lifetime_battles_won)
  * @param {number} limit - Number of results
  * @returns {Promise<Array>} Top guilds
  */
 export async function getLeaderboard(field = 'gold', limit = 10) {
   // Whitelist allowed fields to prevent SQL injection
-  const allowedFields = ['gold', 'level', 'adventurer_count', 'xp'];
+  const allowedFields = ['gold', 'level', 'adventurer_count', 'xp', 'lifetime_gold_earned', 'lifetime_battles_won'];
   if (!allowedFields.includes(field)) {
     field = 'gold';
   }
 
   const result = await query(
-    `SELECT id, discord_id, name, level, gold, adventurer_count, xp
+    `SELECT id, discord_id, name, level, gold, adventurer_count, xp, 
+            lifetime_gold_earned, lifetime_battles_won
      FROM guilds 
      ORDER BY ${field} DESC 
      LIMIT $1`,
@@ -159,7 +160,7 @@ export async function getLeaderboard(field = 'gold', limit = 10) {
  * @returns {Promise<number>} Rank (1-based)
  */
 export async function getPlayerRank(discordId, field = 'gold') {
-  const allowedFields = ['gold', 'level', 'adventurer_count', 'xp'];
+  const allowedFields = ['gold', 'level', 'adventurer_count', 'xp', 'lifetime_gold_earned', 'lifetime_battles_won'];
   if (!allowedFields.includes(field)) {
     field = 'gold';
   }
@@ -171,6 +172,15 @@ export async function getPlayerRank(discordId, field = 'gold') {
     [discordId]
   );
   return parseInt(result.rows[0]?.rank || 1);
+}
+
+/**
+ * Get total count of guilds
+ * @returns {Promise<number>} Total guild count
+ */
+export async function getTotalGuildCount() {
+  const result = await query('SELECT COUNT(*) as count FROM guilds');
+  return parseInt(result.rows[0]?.count || 0);
 }
 
 /**
