@@ -130,6 +130,14 @@ const migrations = [
       ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_battle_xp_lost BIGINT DEFAULT 0;
     `,
   },
+  {
+    name: '005_battle_notifications',
+    sql: `
+      -- Add battle notifications setting (separate from collection reminders)
+      ALTER TABLE notification_settings 
+      ADD COLUMN IF NOT EXISTS battle_notifications_enabled BOOLEAN DEFAULT FALSE;
+    `,
+  },
 ];
 
 async function migrate() {

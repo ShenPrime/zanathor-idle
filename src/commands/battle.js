@@ -396,7 +396,7 @@ async function notifyDefender(client, defenderDiscordId, defenderGuildId, attack
   try {
     const defenderSettings = await getNotificationSettings(defenderGuildId);
     
-    if (defenderSettings?.dm_reminders_enabled) {
+    if (defenderSettings?.battle_notifications_enabled) {
       const defenderUser = await client.users.fetch(defenderDiscordId);
       
       let description;

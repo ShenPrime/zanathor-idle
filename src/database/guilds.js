@@ -258,3 +258,17 @@ export async function updatePeakGold(id, currentGold) {
   );
   return result.rows[0];
 }
+
+/**
+ * Update guild name
+ * @param {number} id - Guild ID
+ * @param {string} name - New guild name
+ * @returns {Promise<Object>} Updated guild
+ */
+export async function updateGuildName(id, name) {
+  const result = await query(
+    `UPDATE guilds SET name = $2 WHERE id = $1 RETURNING *`,
+    [id, name]
+  );
+  return result.rows[0];
+}

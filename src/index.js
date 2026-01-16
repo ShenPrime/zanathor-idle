@@ -273,6 +273,133 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Start command buttons
+    if (interaction.customId === 'start_reconfigure_yes') {
+      try {
+        await startCommand.handleReconfigureYes(interaction);
+      } catch (error) {
+        console.error('Error handling start reconfigure yes:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_reconfigure_no') {
+      try {
+        await startCommand.handleReconfigureNo(interaction);
+      } catch (error) {
+        console.error('Error handling start reconfigure no:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step2_enable') {
+      try {
+        await startCommand.handleStep2Enable(interaction);
+      } catch (error) {
+        console.error('Error handling start step2 enable:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step2_disable') {
+      try {
+        await startCommand.handleStep2Disable(interaction);
+      } catch (error) {
+        console.error('Error handling start step2 disable:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step2_back') {
+      try {
+        await startCommand.handleStep2Back(interaction);
+      } catch (error) {
+        console.error('Error handling start step2 back:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step3_enable') {
+      try {
+        await startCommand.handleStep3Enable(interaction);
+      } catch (error) {
+        console.error('Error handling start step3 enable:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step3_disable') {
+      try {
+        await startCommand.handleStep3Disable(interaction);
+      } catch (error) {
+        console.error('Error handling start step3 disable:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_step3_back') {
+      try {
+        await startCommand.handleStep3Back(interaction);
+      } catch (error) {
+        console.error('Error handling start step3 back:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'start_skip') {
+      try {
+        await startCommand.handleSkip(interaction);
+      } catch (error) {
+        console.error('Error handling start skip:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please run /start again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
   }
 });
 

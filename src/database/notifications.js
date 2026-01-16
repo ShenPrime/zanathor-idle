@@ -111,3 +111,75 @@ export async function getGuildsEligibleForReminder() {
   );
   return result.rows;
 }
+
+/**
+ * Enable battle notifications for a guild
+ * @param {number} guildId - Guild ID
+ * @returns {Promise<Object>} Updated settings
+ */
+export async function enableBattleNotifications(guildId) {
+  const result = await query(
+    `INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
+     VALUES ($1, TRUE)
+     ON CONFLICT (guild_id) 
+     DO UPDATE SET battle_notifications_enabled = TRUE
+     RETURNING *`,
+    [guildId]
+  );
+  return result.rows[0];
+}
+
+/**
+ * Disable battle notifications for a guild
+ * @param {number} guildId - Guild ID
+ * @returns {Promise<Object>} Updated settings
+ */
+export async function disableBattleNotifications(guildId) {
+  const result = await query(
+    `INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
+     VALUES ($1, FALSE)
+     ON CONFLICT (guild_id) 
+     DO UPDATE SET battle_notifications_enabled = FALSE
+     RETURNING *`,
+    [guildId]
+  );
+  return result.rows[0];
+}
+
+/**
+ * Update all notification settings at once (for onboarding flow)
+ * @param {number} guildId - Guild ID
+ * @param {boolean} collectionReminders - Enable collection reminders
+ * @param {boolean} battleNotifications - Enable battle notifications
+ * @returns {Promise<Object>} Updated settings
+ */
+export async function updateAllNotificationSettings(guildId, collectionReminders, battleNotifications) {
+  const result = await query(
+    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
+     VALUES ($1, $2, $3, 0)
+     ON CONFLICT (guild_id) 
+     DO UPDATE SET 
+       dm_reminders_enabled = $2, 
+       battle_notifications_enabled = $3,
+       dm_failures = 0
+     RETURNING *`,
+    [guildId, collectionReminders, battleNotifications]
+  );
+  return result.rows[0];
+}
+
+/**
+ * Create default notification settings for a new guild (all off)
+ * @param {number} guildId - Guild ID
+ * @returns {Promise<Object>} Created settings
+ */
+export async function createDefaultNotificationSettings(guildId) {
+  const result = await query(
+    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
+     VALUES ($1, FALSE, FALSE, 0)
+     ON CONFLICT (guild_id) DO NOTHING
+     RETURNING *`,
+    [guildId]
+  );
+  return result.rows[0];
+}
