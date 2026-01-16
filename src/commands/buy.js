@@ -8,6 +8,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import {
@@ -131,7 +132,7 @@ export async function execute(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   
@@ -217,7 +218,7 @@ export async function handleModal(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('Your guild was not found. Please try again.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   

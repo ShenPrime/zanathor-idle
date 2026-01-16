@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import {
   getNotificationSettings,
@@ -6,7 +6,6 @@ import {
   disableReminders,
 } from '../database/notifications.js';
 import { createSuccessEmbed, createErrorEmbed, COLORS } from '../utils/embeds.js';
-import { EmbedBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName('notify')
@@ -33,7 +32,7 @@ export async function execute(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   

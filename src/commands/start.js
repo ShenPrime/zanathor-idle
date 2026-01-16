@@ -4,6 +4,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { getGuildByDiscordId, createGuild } from '../database/guilds.js';
 import { createGuildEmbed, createErrorEmbed } from '../utils/embeds.js';
@@ -20,7 +21,7 @@ export async function execute(interaction) {
   if (existingGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed(`You already have a guild named **${existingGuild.name}**! Use \`/guild\` to view it.`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   
@@ -55,7 +56,7 @@ export async function handleModal(interaction) {
   if (guildName.length < 3) {
     return interaction.reply({
       embeds: [createErrorEmbed('Guild name must be at least 3 characters long.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   
@@ -76,7 +77,7 @@ export async function handleModal(interaction) {
     console.error('Error creating guild:', error);
     await interaction.reply({
       embeds: [createErrorEmbed('Failed to create your guild. Please try again.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

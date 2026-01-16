@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getGuildByDiscordId, collectResources, updateAdventurerCount, incrementStats, updatePeakGold } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { createCollectEmbed, createErrorEmbed } from '../utils/embeds.js';
@@ -19,7 +19,7 @@ export async function execute(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   
@@ -30,7 +30,7 @@ export async function execute(interaction) {
   if (earnings.hoursElapsed < 1/60) {
     return interaction.reply({
       embeds: [createErrorEmbed('Your adventurers just returned! Wait a bit before collecting again.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   

@@ -6,6 +6,7 @@ import {
   REST,
   Routes,
   Events,
+  MessageFlags,
 } from 'discord.js';
 import { BOT_TOKEN, CLIENT_ID, DEV_GUILD_ID } from './config.js';
 import { testConnection } from './database/connection.js';
@@ -109,7 +110,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const errorMessage = {
         content: 'There was an error executing this command!',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       };
 
       if (interaction.replied || interaction.deferred) {
@@ -146,7 +147,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied) {
           await interaction.reply({
             content: 'There was an error creating your guild. Please try again.',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       }
@@ -162,7 +163,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied) {
           await interaction.reply({
             content: 'There was an error processing your purchase. Please try again.',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       }
@@ -180,7 +181,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: 'There was an error with your selection. Please try again.',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       }

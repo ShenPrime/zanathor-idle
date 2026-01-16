@@ -5,6 +5,7 @@ import {
   ActionRowBuilder,
   EmbedBuilder,
   ComponentType,
+  MessageFlags,
 } from 'discord.js';
 import { getGuildByDiscordId, addResources, incrementStats, updatePeakGold } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
@@ -53,7 +54,7 @@ export async function execute(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { createGuildEmbed, createErrorEmbed } from '../utils/embeds.js';
@@ -14,7 +14,7 @@ export async function execute(interaction) {
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   
