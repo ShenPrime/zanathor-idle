@@ -14,10 +14,9 @@ const pool = new Pool({
 // First upgrade at ~50 gold = 10 minutes (with 25 starting gold = ~5 min)
 const upgrades = [
   // === RECRUITMENT CATEGORY ===
-  // Increases adventurer capacity and passive gain
   {
     name: 'Job Board',
-    description: 'Post job listings to attract more adventurers. +3 adventurer capacity per level.',
+    description: '+3 adventurer capacity/lvl',
     category: 'recruitment',
     base_cost: 50,
     cost_multiplier: 1.25,
@@ -29,7 +28,7 @@ const upgrades = [
   },
   {
     name: 'Guild Scouts',
-    description: 'Send scouts to recruit new adventurers. +1 adventurer joins per hour.',
+    description: '+1 adventurer/hr per lvl',
     category: 'recruitment',
     base_cost: 80,
     cost_multiplier: 1.3,
@@ -41,7 +40,7 @@ const upgrades = [
   },
   {
     name: 'Guild Reputation',
-    description: 'Word spreads of your guild\'s success. +2 adventurers join passively per hour.',
+    description: '+2 adventurers/hr per lvl',
     category: 'recruitment',
     base_cost: 150,
     cost_multiplier: 1.4,
@@ -53,7 +52,7 @@ const upgrades = [
   },
   {
     name: 'Recruitment Office',
-    description: 'A dedicated office for handling new recruits. +8 adventurer capacity.',
+    description: '+8 adventurer capacity/lvl',
     category: 'recruitment',
     base_cost: 400,
     cost_multiplier: 1.5,
@@ -65,7 +64,7 @@ const upgrades = [
   },
   {
     name: 'Famous Benefactor',
-    description: 'A noble sponsors your guild. +25 adventurer capacity.',
+    description: '+25 adventurer capacity/lvl',
     category: 'recruitment',
     base_cost: 5000,
     cost_multiplier: 2.0,
@@ -77,10 +76,9 @@ const upgrades = [
   },
 
   // === EQUIPMENT CATEGORY ===
-  // Increases gold generation per adventurer
   {
     name: 'Basic Armory',
-    description: 'Provide basic weapons and armor. +15% gold per adventurer.',
+    description: '+15% gold/lvl',
     category: 'equipment',
     base_cost: 75,
     cost_multiplier: 1.3,
@@ -92,7 +90,7 @@ const upgrades = [
   },
   {
     name: 'Iron Forge',
-    description: 'Upgrade to iron equipment. +20% gold per adventurer.',
+    description: '+20% gold/lvl',
     category: 'equipment',
     base_cost: 350,
     cost_multiplier: 1.35,
@@ -104,7 +102,7 @@ const upgrades = [
   },
   {
     name: 'Steel Works',
-    description: 'Master-crafted steel equipment. +25% gold per adventurer.',
+    description: '+25% gold/lvl',
     category: 'equipment',
     base_cost: 1500,
     cost_multiplier: 1.4,
@@ -116,7 +114,7 @@ const upgrades = [
   },
   {
     name: 'Enchanted Arsenal',
-    description: 'Magical weapons and armor. +35% gold per adventurer.',
+    description: '+35% gold/lvl',
     category: 'equipment',
     base_cost: 8000,
     cost_multiplier: 1.6,
@@ -128,10 +126,9 @@ const upgrades = [
   },
 
   // === FACILITIES CATEGORY ===
-  // Increases XP gain and unlocks features
   {
     name: 'Training Grounds',
-    description: 'A place for adventurers to hone their skills. +25% XP gain.',
+    description: '+25% XP/lvl',
     category: 'facilities',
     base_cost: 100,
     cost_multiplier: 1.3,
@@ -143,7 +140,7 @@ const upgrades = [
   },
   {
     name: 'Tavern',
-    description: 'A place to relax and share tales. +12% gold and XP.',
+    description: '+12% gold & XP/lvl',
     category: 'facilities',
     base_cost: 250,
     cost_multiplier: 1.4,
@@ -155,19 +152,19 @@ const upgrades = [
   },
   {
     name: 'Barracks',
-    description: 'Housing for your adventurers. +12 adventurer capacity, +8% gold.',
+    description: '+12 capacity, +8% gold/lvl',
     category: 'facilities',
     base_cost: 600,
     cost_multiplier: 1.5,
     effect_type: 'capacity_and_gold',
-    effect_value: 12, // capacity bonus, gold bonus is 8% per level
+    effect_value: 12,
     max_level: 5,
     required_guild_level: 5,
     required_adventurer_count: 15,
   },
   {
     name: 'Library',
-    description: 'Knowledge is power. +50% XP gain.',
+    description: '+50% XP/lvl',
     category: 'facilities',
     base_cost: 2000,
     cost_multiplier: 1.6,
@@ -179,7 +176,7 @@ const upgrades = [
   },
   {
     name: 'Grand Hall',
-    description: 'An impressive hall for guild meetings. +30% all gains.',
+    description: '+30% gold & XP/lvl',
     category: 'facilities',
     base_cost: 12000,
     cost_multiplier: 2.0,
@@ -191,10 +188,9 @@ const upgrades = [
   },
 
   // === MISSIONS CATEGORY ===
-  // Unlocks higher tier passive missions (flat bonuses)
   {
     name: 'Escort Contracts',
-    description: 'Take on merchant escort missions. +30 base gold per hour.',
+    description: '+30 gold/hr per lvl',
     category: 'missions',
     base_cost: 120,
     cost_multiplier: 1.3,
@@ -206,7 +202,7 @@ const upgrades = [
   },
   {
     name: 'Monster Bounties',
-    description: 'Hunt dangerous creatures for rewards. +60 base gold per hour.',
+    description: '+60 gold/hr per lvl',
     category: 'missions',
     base_cost: 500,
     cost_multiplier: 1.4,
@@ -218,19 +214,19 @@ const upgrades = [
   },
   {
     name: 'Dungeon Expeditions',
-    description: 'Explore dangerous dungeons. +150 base gold, +75 base XP per hour.',
+    description: '+150 gold, +75 XP/hr per lvl',
     category: 'missions',
     base_cost: 2500,
     cost_multiplier: 1.6,
     effect_type: 'base_gold_and_xp',
-    effect_value: 150, // gold, XP is 50% of gold
+    effect_value: 150,
     max_level: 5,
     required_guild_level: 10,
     required_adventurer_count: 30,
   },
   {
     name: 'Royal Commissions',
-    description: 'Prestigious missions from the crown. +300 base gold, +150 XP per hour.',
+    description: '+300 gold, +150 XP/hr per lvl',
     category: 'missions',
     base_cost: 15000,
     cost_multiplier: 1.8,
