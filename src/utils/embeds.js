@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { formatNumber, progressBar } from './format.js';
-import { getRankForLevel, getXpForLevel, getTotalXpForLevel } from '../config.js';
+import { getRankForLevel, getNextRank, getXpForLevel, getTotalXpForLevel } from '../config.js';
 
 // Color palette for embeds
 export const COLORS = {
@@ -13,6 +13,23 @@ export const COLORS = {
 };
 
 import { GAME } from '../config.js';
+
+/**
+ * Generate rank bonus display text with next rank info
+ */
+function getRankBonusText(level, currentRank) {
+  const nextRank = getNextRank(level);
+  
+  let text = `${currentRank.name} (x${currentRank.multiplier})`;
+  
+  if (nextRank) {
+    text += `\nNext: ${nextRank.name} at Lv ${nextRank.level}`;
+  } else {
+    text += `\n*Max Rank!*`;
+  }
+  
+  return text;
+}
 
 /**
  * Create a guild profile embed
@@ -50,7 +67,7 @@ export function createGuildEmbed(guild, stats = {}, pendingEarnings = null) {
       },
       {
         name: 'Rank Bonus',
-        value: `**x${rank.multiplier}**`,
+        value: getRankBonusText(guild.level, rank),
         inline: true,
       }
     );

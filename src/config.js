@@ -53,6 +53,16 @@ export function getRankForLevel(level) {
   return currentRank;
 }
 
+// Get the next rank after the current level (or null if at max rank)
+export function getNextRank(level) {
+  for (const rank of RANKS) {
+    if (rank.level > level) {
+      return rank;
+    }
+  }
+  return null; // Already at max rank
+}
+
 // Get XP required for a specific level
 export function getXpForLevel(level) {
   if (level <= 1) return 0;
