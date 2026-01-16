@@ -21,6 +21,13 @@ import { formatNumber } from '../utils/format.js';
 export const data = new SlashCommandBuilder()
   .setName('battle')
   .setDescription('Battle another guild and bet gold on the outcome!')
+  .addIntegerOption(option =>
+    option
+      .setName('bet')
+      .setDescription('Amount of gold to bet')
+      .setRequired(true)
+      .setMinValue(0) // DEV: Set to 0 for testing, change to MINIMUM_BET for production
+  )
   .addUserOption(option =>
     option
       .setName('user')
@@ -32,13 +39,6 @@ export const data = new SlashCommandBuilder()
       .setName('random')
       .setDescription('Battle a random player')
       .setRequired(false)
-  )
-  .addIntegerOption(option =>
-    option
-      .setName('bet')
-      .setDescription('Amount of gold to bet')
-      .setRequired(true)
-      .setMinValue(0) // DEV: Set to 0 for testing, change to MINIMUM_BET for production
   );
 
 export async function execute(interaction) {
