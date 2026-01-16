@@ -7,7 +7,7 @@ import {
   Routes,
   Events,
 } from 'discord.js';
-import { BOT_TOKEN, CLIENT_ID } from './config.js';
+import { BOT_TOKEN, CLIENT_ID, DEV_GUILD_ID } from './config.js';
 import { testConnection } from './database/connection.js';
 
 // Import commands
@@ -19,6 +19,10 @@ import * as buyCommand from './commands/buy.js';
 import * as leaderboardCommand from './commands/leaderboard.js';
 import * as helpCommand from './commands/help.js';
 import * as grindCommand from './commands/grind.js';
+import * as notifyCommand from './commands/notify.js';
+
+// Import jobs
+import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
 
 // Validate environment
 if (!BOT_TOKEN) {
@@ -48,6 +52,7 @@ const commands = [
   leaderboardCommand,
   helpCommand,
   grindCommand,
+  notifyCommand,
 ];
 
 // Register commands in collection
@@ -60,15 +65,25 @@ async function deployCommands() {
   const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
 
   try {
-    console.log('Registering slash commands...');
-
     const commandData = commands.map((cmd) => cmd.data.toJSON());
 
-    await rest.put(Routes.applicationCommands(CLIENT_ID), {
-      body: commandData,
-    });
-
-    console.log(`Successfully registered ${commands.length} commands!`);
+    // Use guild commands for instant updates during development
+    // Set DEV_GUILD_ID in .env for dev, leave it unset for production (global commands)
+    if (DEV_GUILD_ID) {
+      console.log(`Registering ${commands.length} guild commands (instant updates)...`);
+      await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, DEV_GUILD_ID),
+        { body: commandData }
+      );
+      console.log(`Successfully registered ${commands.length} commands to dev guild!`);
+    } else {
+      console.log(`Registering ${commands.length} global commands (may take up to 1 hour)...`);
+      await rest.put(
+        Routes.applicationCommands(CLIENT_ID),
+        { body: commandData }
+      );
+      console.log(`Successfully registered ${commands.length} global commands!`);
+    }
   } catch (error) {
     console.error('Error registering commands:', error);
   }
@@ -210,12 +225,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`\nLogged in as ${readyClient.user.tag}!`);
   console.log(`Bot is in ${readyClient.guilds.cache.size} server(s)`);
+  
+  // Start the reminder checker
+  startReminderChecker(client);
+  
   console.log('\nZanathor is ready for adventurers!\n');
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
+  
+  // Stop the reminder checker
+  stopReminderChecker();
   
   // Flush all active grind sessions before shutting down
   console.log('Flushing active grind sessions...');

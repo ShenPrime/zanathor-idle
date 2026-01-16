@@ -3,6 +3,7 @@ import 'dotenv/config';
 // Bot configuration
 export const BOT_TOKEN = process.env.DISCORD_TOKEN;
 export const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+export const DEV_GUILD_ID = process.env.DEV_GUILD_ID; // For instant command updates during development
 
 // Database configuration
 export const DATABASE_URL = process.env.DATABASE_URL;

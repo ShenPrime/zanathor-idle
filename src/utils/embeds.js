@@ -12,13 +12,16 @@ export const COLORS = {
   INFO: 0x3498DB,       // Blue
 };
 
+import { GAME } from '../config.js';
+
 /**
  * Create a guild profile embed
  * @param {Object} guild - Guild data from database
  * @param {Object} stats - Calculated stats (goldPerHour, xpPerHour)
+ * @param {Object} pendingEarnings - Pending earnings from calculateIdleEarnings()
  * @returns {EmbedBuilder}
  */
-export function createGuildEmbed(guild, stats = {}) {
+export function createGuildEmbed(guild, stats = {}, pendingEarnings = null) {
   const rank = getRankForLevel(guild.level);
   const nextLevelXp = getTotalXpForLevel(guild.level + 1);
   const currentLevelXp = getTotalXpForLevel(guild.level);
@@ -67,8 +70,33 @@ export function createGuildEmbed(guild, stats = {}) {
     );
   }
   
-  embed.setFooter({ text: 'Use /collect to claim your earnings!' })
-    .setTimestamp();
+  // Add pending earnings field
+  if (pendingEarnings) {
+    const hoursText = pendingEarnings.hoursElapsed < 1 
+      ? `${Math.round(pendingEarnings.hoursElapsed * 60)} min`
+      : `${pendingEarnings.hoursElapsed.toFixed(1)} hrs`;
+    
+    embed.addFields({
+      name: 'Pending Collection',
+      value: `**+${formatNumber(pendingEarnings.goldEarned)}** gold, **+${formatNumber(pendingEarnings.xpEarned)}** XP (${hoursText})`,
+      inline: false,
+    });
+    
+    // Check if approaching 24hr cap (warn at 20+ hours)
+    const hoursRemaining = GAME.MAX_IDLE_HOURS - pendingEarnings.hoursElapsed;
+    if (pendingEarnings.wasCapped) {
+      embed.setFooter({ text: 'Your earnings have reached the 24hr cap! Collect now to avoid missing out.' });
+      embed.setColor(COLORS.WARNING);
+    } else if (hoursRemaining <= 4) {
+      embed.setFooter({ text: `Warning: Earnings will cap in ${hoursRemaining.toFixed(1)} hours! Collect soon.` });
+    } else {
+      embed.setFooter({ text: 'Use /collect to claim your earnings!' });
+    }
+  } else {
+    embed.setFooter({ text: 'Use /collect to claim your earnings!' });
+  }
+  
+  embed.setTimestamp();
   
   return embed;
 }

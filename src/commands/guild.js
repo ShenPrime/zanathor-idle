@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { createGuildEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { calculateRates, calculateUpgradeBonuses, getEffectiveCapacity } from '../game/idle.js';
+import { calculateRates, calculateUpgradeBonuses, getEffectiveCapacity, calculateIdleEarnings } from '../game/idle.js';
 
 export const data = new SlashCommandBuilder()
   .setName('guild')
@@ -23,6 +23,9 @@ export async function execute(interaction) {
   const bonuses = calculateUpgradeBonuses(upgrades);
   const rates = calculateRates(guild, bonuses);
   
+  // Calculate pending earnings
+  const pendingEarnings = await calculateIdleEarnings(guild);
+  
   // Update capacity display with bonus
   const effectiveCapacity = getEffectiveCapacity(guild, bonuses);
   const displayGuild = {
@@ -31,6 +34,6 @@ export async function execute(interaction) {
   };
   
   await interaction.reply({
-    embeds: [createGuildEmbed(displayGuild, rates)],
+    embeds: [createGuildEmbed(displayGuild, rates, pendingEarnings)],
   });
 }

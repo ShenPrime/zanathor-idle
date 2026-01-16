@@ -28,8 +28,9 @@ export async function execute(interaction) {
         name: 'Progression',
         value:
           '`/upgrades [category]` - Browse available upgrades\n' +
-          '`/buy <upgrade>` - Purchase upgrades with gold\n' +
-          '`/leaderboard [type]` - See the top guilds',
+          '`/buy` - Purchase upgrades with gold\n' +
+          '`/leaderboard [type]` - See the top guilds\n' +
+          '`/notify on|off|status` - Manage DM collection reminders',
         inline: false,
       },
       {

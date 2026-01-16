@@ -65,6 +65,19 @@ const migrations = [
       );
     `,
   },
+  {
+    name: '002_notification_settings',
+    sql: `
+      -- Notification settings for DM reminders
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        guild_id INTEGER PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+        dm_reminders_enabled BOOLEAN DEFAULT FALSE,
+        last_reminder_at TIMESTAMP WITH TIME ZONE,
+        dm_failures INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `,
+  },
 ];
 
 async function migrate() {
