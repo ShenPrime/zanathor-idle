@@ -241,6 +241,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Battle accept challenge button
+    if (interaction.customId.startsWith('battle_accept:')) {
+      try {
+        await battleCommand.handleBattleAccept(interaction);
+      } catch (error) {
+        console.error('Error handling battle accept:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error accepting the challenge. Please try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Battle decline challenge button
+    if (interaction.customId.startsWith('battle_decline:')) {
+      try {
+        await battleCommand.handleBattleDecline(interaction);
+      } catch (error) {
+        console.error('Error handling battle decline:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error declining the challenge.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
   }
 });
 

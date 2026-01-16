@@ -13,6 +13,14 @@ const TARGET_COOLDOWN_MS = 0;
 const DAILY_BATTLE_LIMIT = 999;
 const MINIMUM_BET = 0;
 
+// Power ratio thresholds for battle balancing
+const POWER_RATIO_AUTO_FULL = 3;     // < 3x: auto-battle with full losses
+const POWER_RATIO_AUTO_CAPPED = 5;   // 3-5x: auto-battle with losses capped at 2x bet
+                                      // > 5x: requires defender consent, losses capped at 1x bet
+
+// Consent timeout in milliseconds
+const CONSENT_TIMEOUT_MS = 30 * 1000; // 30 seconds
+
 /**
  * Calculate guild power for battle
  * Power = adventurers + (gold / 1000) + (rankBonus * 10)
@@ -59,20 +67,70 @@ export function rollBattle(winChance) {
 }
 
 /**
- * Calculate loser's losses
- * Gold: 5-10% of current gold
- * XP: 2-5% of current XP
- * @param {Object} loserGuild - Loser's guild
- * @returns {{ goldLoss: number, xpLoss: number }}
+ * Calculate power ratio between two guilds
+ * @param {number} power1 - First guild's power
+ * @param {number} power2 - Second guild's power
+ * @returns {number} Ratio of stronger/weaker (always >= 1)
  */
-export function calculateLosses(loserGuild) {
+export function calculatePowerRatio(power1, power2) {
+  const stronger = Math.max(power1, power2);
+  const weaker = Math.min(power1, power2);
+  if (weaker === 0) return Infinity;
+  return stronger / weaker;
+}
+
+/**
+ * Determine battle type based on power ratio
+ * @param {number} powerRatio - Power ratio between guilds
+ * @returns {{ type: 'auto_full' | 'auto_capped' | 'consent', lossCap: number }}
+ */
+export function getBattleType(powerRatio) {
+  if (powerRatio < POWER_RATIO_AUTO_FULL) {
+    return { type: 'auto_full', lossCap: Infinity };
+  } else if (powerRatio < POWER_RATIO_AUTO_CAPPED) {
+    return { type: 'auto_capped', lossCap: 2 }; // Cap at 2x bet
+  } else {
+    return { type: 'consent', lossCap: 1 }; // Cap at 1x bet, requires consent
+  }
+}
+
+/**
+ * Calculate loser's losses with optional cap based on bet amount
+ * Gold: 5-10% of current gold (capped if power disparity)
+ * XP: 2-5% of current XP (capped proportionally)
+ * @param {Object} loserGuild - Loser's guild
+ * @param {number} betAmount - The bet amount
+ * @param {number} lossCap - Multiplier cap (e.g., 2 = max 2x bet, Infinity = no cap)
+ * @returns {{ goldLoss: number, xpLoss: number, wasCapped: boolean }}
+ */
+export function calculateLosses(loserGuild, betAmount = 0, lossCap = Infinity) {
   const goldPercent = 5 + Math.random() * 5; // 5-10%
   const xpPercent = 2 + Math.random() * 3; // 2-5%
   
-  const goldLoss = Math.floor(Number(loserGuild.gold) * (goldPercent / 100));
-  const xpLoss = Math.floor(Number(loserGuild.xp) * (xpPercent / 100));
+  let goldLoss = Math.floor(Number(loserGuild.gold) * (goldPercent / 100));
+  let xpLoss = Math.floor(Number(loserGuild.xp) * (xpPercent / 100));
   
-  return { goldLoss, xpLoss };
+  // Apply cap if needed
+  const maxGoldLoss = lossCap === Infinity ? Infinity : betAmount * lossCap;
+  let wasCapped = false;
+  
+  if (goldLoss > maxGoldLoss) {
+    // Scale XP loss proportionally when gold is capped
+    const scaleFactor = maxGoldLoss / goldLoss;
+    goldLoss = Math.floor(maxGoldLoss);
+    xpLoss = Math.floor(xpLoss * scaleFactor);
+    wasCapped = true;
+  }
+  
+  return { goldLoss, xpLoss, wasCapped };
+}
+
+/**
+ * Get the consent timeout in milliseconds
+ * @returns {number} Timeout in ms
+ */
+export function getConsentTimeout() {
+  return CONSENT_TIMEOUT_MS;
 }
 
 /**
@@ -299,4 +357,42 @@ export function getMinimumBet() {
  */
 export function getDailyBattleLimit() {
   return DAILY_BATTLE_LIMIT;
+}
+
+/**
+ * Lock gold for a pending battle challenge (deduct from available gold)
+ * @param {number} guildId - Guild ID
+ * @param {number} amount - Amount to lock
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function lockBetGold(guildId, amount) {
+  const result = await query(
+    `UPDATE guilds SET gold = gold - $2 WHERE id = $1 AND gold >= $2 RETURNING *`,
+    [guildId, amount]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Unlock/return gold for a declined or expired challenge
+ * @param {number} guildId - Guild ID
+ * @param {number} amount - Amount to return
+ * @returns {Promise<void>}
+ */
+export async function unlockBetGold(guildId, amount) {
+  await query(
+    `UPDATE guilds SET gold = gold + $2 WHERE id = $1`,
+    [guildId, amount]
+  );
+}
+
+/**
+ * Get power ratio thresholds for display
+ * @returns {{ autoFull: number, autoCapped: number }}
+ */
+export function getPowerRatioThresholds() {
+  return {
+    autoFull: POWER_RATIO_AUTO_FULL,
+    autoCapped: POWER_RATIO_AUTO_CAPPED,
+  };
 }
