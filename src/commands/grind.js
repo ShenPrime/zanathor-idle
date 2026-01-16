@@ -66,13 +66,13 @@ export async function execute(interaction) {
   const bonuses = calculateUpgradeBonuses(upgrades);
   const rank = getRankForLevel(guild.level);
   
-  // Gold per click = full guild's per-second rate (matches idle income)
+  // Gold per click = 40 seconds of idle income
   const goldPerClick = Math.max(1, Math.floor(
-    (GAME.BASE_GOLD_PER_HOUR / 3600) * guild.adventurer_count * rank.multiplier * bonuses.goldMultiplier
+    (GAME.BASE_GOLD_PER_HOUR / 90) * guild.adventurer_count * rank.multiplier * bonuses.goldMultiplier
   ));
   
   const xpPerClick = Math.max(1, Math.floor(
-    (GAME.BASE_XP_PER_HOUR / 3600) * guild.adventurer_count * bonuses.xpMultiplier
+    (GAME.BASE_XP_PER_HOUR / 90) * guild.adventurer_count * bonuses.xpMultiplier
   ));
   
   // Create new session
