@@ -108,7 +108,7 @@ export async function execute(interaction) {
   const response = await interaction.reply({
     embeds: [embed],
     components: [row],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
   
   // Set up button collector
