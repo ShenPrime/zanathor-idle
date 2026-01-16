@@ -191,10 +191,16 @@ export async function purchaseUpgradeMultiple(guildId, upgradeId, levelsToBuy, t
   try {
     await client.query('BEGIN');
     
-    // Deduct gold
+    // Deduct gold and track spending stats
     const goldResult = await client.query(
-      'UPDATE guilds SET gold = gold - $2 WHERE id = $1 AND gold >= $2 RETURNING *',
-      [guildId, totalCost]
+      `UPDATE guilds 
+       SET gold = gold - $2,
+           lifetime_gold_spent = lifetime_gold_spent + $2,
+           lifetime_upgrades_purchased = lifetime_upgrades_purchased + $3,
+           peak_gold_balance = GREATEST(peak_gold_balance, gold - $2)
+       WHERE id = $1 AND gold >= $2 
+       RETURNING *`,
+      [guildId, totalCost, levelsToBuy]
     );
     
     if (!goldResult.rows[0]) {

@@ -192,3 +192,63 @@ export async function addResources(id, goldToAdd, xpToAdd) {
   );
   return result.rows[0];
 }
+
+/**
+ * Increment lifetime stats for a guild
+ * @param {number} id - Guild ID
+ * @param {Object} stats - Stats to increment (e.g., { lifetime_gold_earned: 100, lifetime_xp_earned: 50 })
+ * @returns {Promise<Object>} Updated guild
+ */
+export async function incrementStats(id, stats) {
+  const validStats = [
+    'lifetime_gold_earned',
+    'lifetime_xp_earned',
+    'lifetime_gold_spent',
+    'lifetime_upgrades_purchased',
+    'lifetime_grind_clicks',
+    'lifetime_grind_sessions',
+    'lifetime_grind_gold',
+    'lifetime_adventurers_recruited',
+  ];
+  
+  // Build SET clause dynamically
+  const setClauses = [];
+  const values = [id];
+  let paramIndex = 2;
+  
+  for (const [key, value] of Object.entries(stats)) {
+    if (validStats.includes(key) && typeof value === 'number') {
+      setClauses.push(`${key} = ${key} + $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    }
+  }
+  
+  if (setClauses.length === 0) {
+    // No valid stats to update
+    return getGuildById(id);
+  }
+  
+  const result = await query(
+    `UPDATE guilds SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    values
+  );
+  return result.rows[0];
+}
+
+/**
+ * Update peak gold balance if current gold is higher
+ * @param {number} id - Guild ID
+ * @param {number} currentGold - Current gold balance to compare
+ * @returns {Promise<Object>} Updated guild
+ */
+export async function updatePeakGold(id, currentGold) {
+  const result = await query(
+    `UPDATE guilds 
+     SET peak_gold_balance = GREATEST(peak_gold_balance, $2)
+     WHERE id = $1
+     RETURNING *`,
+    [id, currentGold]
+  );
+  return result.rows[0];
+}

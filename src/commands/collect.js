@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getGuildByDiscordId, collectResources, updateAdventurerCount } from '../database/guilds.js';
+import { getGuildByDiscordId, collectResources, updateAdventurerCount, incrementStats, updatePeakGold } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { createCollectEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { calculateIdleEarnings, calculateUpgradeBonuses, getEffectiveCapacity } from '../game/idle.js';
@@ -37,7 +37,14 @@ export async function execute(interaction) {
   // Collect the resources
   let updatedGuild = await collectResources(guild.id, earnings.goldEarned, earnings.xpEarned);
   
+  // Track lifetime stats
+  const statsToIncrement = {
+    lifetime_gold_earned: earnings.goldEarned,
+    lifetime_xp_earned: earnings.xpEarned,
+  };
+  
   // Handle adventurer growth from upgrades
+  let adventurersRecruited = 0;
   if (earnings.adventurersGained > 0) {
     const upgrades = await getGuildUpgrades(guild.id);
     const bonuses = calculateUpgradeBonuses(upgrades);
@@ -49,9 +56,19 @@ export async function execute(interaction) {
     );
     
     if (newCount > guild.adventurer_count) {
+      adventurersRecruited = newCount - guild.adventurer_count;
       updatedGuild = await updateAdventurerCount(guild.id, newCount);
     }
   }
+  
+  // Add recruited adventurers to stats
+  if (adventurersRecruited > 0) {
+    statsToIncrement.lifetime_adventurers_recruited = adventurersRecruited;
+  }
+  
+  // Update lifetime stats and peak gold
+  await incrementStats(guild.id, statsToIncrement);
+  await updatePeakGold(guild.id, updatedGuild.gold);
   
   // Check for level-ups
   const levelResult = await checkAndApplyLevelUp(updatedGuild);

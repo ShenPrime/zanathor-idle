@@ -30,7 +30,8 @@ export async function execute(interaction) {
           '`/upgrades [category]` - Browse available upgrades\n' +
           '`/buy` - Purchase upgrades with gold\n' +
           '`/leaderboard [type]` - See the top guilds\n' +
-          '`/notify on|off|status` - Manage DM collection reminders',
+          '`/notify on|off|status` - Manage DM collection reminders\n' +
+          '`/nerdstats` - View detailed lifetime statistics',
         inline: false,
       },
       {

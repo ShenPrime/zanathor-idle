@@ -78,6 +78,21 @@ const migrations = [
       );
     `,
   },
+  {
+    name: '003_lifetime_stats',
+    sql: `
+      -- Lifetime statistics for nerds
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_gold_earned BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_xp_earned BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_gold_spent BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_upgrades_purchased INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_grind_clicks INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_grind_sessions INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_grind_gold BIGINT DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_adventurers_recruited INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS peak_gold_balance BIGINT DEFAULT 0;
+    `,
+  },
 ];
 
 async function migrate() {

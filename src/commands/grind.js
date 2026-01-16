@@ -6,7 +6,7 @@ import {
   EmbedBuilder,
   ComponentType,
 } from 'discord.js';
-import { getGuildByDiscordId, addResources } from '../database/guilds.js';
+import { getGuildByDiscordId, addResources, incrementStats, updatePeakGold } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { calculateUpgradeBonuses } from '../game/idle.js';
 import { checkAndApplyLevelUp } from '../game/leveling.js';
@@ -89,12 +89,16 @@ export async function execute(interaction) {
     totalClicks: 0,
     flushedGold: 0,
     flushedXp: 0,
+    flushedClicks: 0, // Track clicks that have been flushed to DB
     lastClickTime: Date.now(),
     flushTimeout: null,
     updateEmbed: null,
   };
   
   grindSessions.set(odId, session);
+  
+  // Track that a new grind session was started
+  await incrementStats(guild.id, { lifetime_grind_sessions: 1 });
   
   // Create the embed and button
   const embed = createGrindEmbed(session);
@@ -214,6 +218,7 @@ export async function flushSession(odId, final = false) {
   // Calculate how much to flush
   const goldToFlush = session.sessionGold - session.flushedGold;
   const xpToFlush = session.sessionXp - session.flushedXp;
+  const clicksToFlush = session.totalClicks - session.flushedClicks;
   
   // Nothing to flush
   if (goldToFlush <= 0 && xpToFlush <= 0) {
@@ -224,9 +229,19 @@ export async function flushSession(odId, final = false) {
     // Write to database
     const updatedGuild = await addResources(session.guildId, goldToFlush, xpToFlush);
     
+    // Track grind stats
+    await incrementStats(session.guildId, {
+      lifetime_grind_gold: goldToFlush,
+      lifetime_grind_clicks: clicksToFlush,
+    });
+    
+    // Update peak gold
+    await updatePeakGold(session.guildId, updatedGuild.gold);
+    
     // Update flushed tracking
     session.flushedGold = session.sessionGold;
     session.flushedXp = session.sessionXp;
+    session.flushedClicks = session.totalClicks;
     
     // Check for level-up
     const levelResult = await checkAndApplyLevelUp(updatedGuild);

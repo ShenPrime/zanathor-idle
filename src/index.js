@@ -20,6 +20,7 @@ import * as leaderboardCommand from './commands/leaderboard.js';
 import * as helpCommand from './commands/help.js';
 import * as grindCommand from './commands/grind.js';
 import * as notifyCommand from './commands/notify.js';
+import * as nerdstatsCommand from './commands/nerdstats.js';
 
 // Import jobs
 import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
@@ -53,6 +54,7 @@ const commands = [
   helpCommand,
   grindCommand,
   notifyCommand,
+  nerdstatsCommand,
 ];
 
 // Register commands in collection
