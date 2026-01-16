@@ -20,8 +20,8 @@ const migrations = [
         level INTEGER DEFAULT 1,
         xp BIGINT DEFAULT 0,
         gold BIGINT DEFAULT 0,
-        adventurer_count INTEGER DEFAULT 3,
-        adventurer_capacity INTEGER DEFAULT 5,
+        adventurer_count INTEGER DEFAULT 5,
+        adventurer_capacity INTEGER DEFAULT 10,
         last_collected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );

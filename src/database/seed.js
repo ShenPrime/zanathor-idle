@@ -28,6 +28,18 @@ const upgrades = [
     required_adventurer_count: 0,
   },
   {
+    name: 'Guild Scouts',
+    description: 'Send scouts to recruit new adventurers. +1 adventurer joins per hour.',
+    category: 'recruitment',
+    base_cost: 80,
+    cost_multiplier: 1.3,
+    effect_type: 'adventurer_per_hour',
+    effect_value: 1,
+    max_level: 5,
+    required_guild_level: 1,
+    required_adventurer_count: 0,
+  },
+  {
     name: 'Guild Reputation',
     description: 'Word spreads of your guild\'s success. +2 adventurers join passively per hour.',
     category: 'recruitment',

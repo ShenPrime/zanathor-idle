@@ -136,6 +136,103 @@ export function calculateUpgradeCost(upgrade, currentLevel) {
 }
 
 /**
+ * Calculate total cost for buying multiple levels of an upgrade
+ * @param {Object} upgrade - The upgrade object
+ * @param {number} currentLevel - Current level owned
+ * @param {number} quantity - Number of levels to buy
+ * @returns {{ totalCost: number, finalLevel: number, levelsBought: number }}
+ */
+export function calculateBulkPurchaseCost(upgrade, currentLevel, quantity) {
+  let totalCost = 0;
+  let level = currentLevel;
+  const maxLevel = upgrade.max_level || Infinity;
+  
+  for (let i = 0; i < quantity && level < maxLevel; i++) {
+    totalCost += Math.floor(upgrade.base_cost * Math.pow(upgrade.cost_multiplier, level));
+    level++;
+  }
+  
+  return { totalCost, finalLevel: level, levelsBought: level - currentLevel };
+}
+
+/**
+ * Calculate maximum levels affordable with given gold
+ * @param {Object} upgrade - The upgrade object
+ * @param {number} currentLevel - Current level owned
+ * @param {number} availableGold - Gold available to spend
+ * @returns {{ totalCost: number, finalLevel: number, levelsBought: number }}
+ */
+export function calculateMaxAffordable(upgrade, currentLevel, availableGold) {
+  let totalCost = 0;
+  let level = currentLevel;
+  const maxLevel = upgrade.max_level || Infinity;
+  
+  while (level < maxLevel) {
+    const nextCost = Math.floor(upgrade.base_cost * Math.pow(upgrade.cost_multiplier, level));
+    if (totalCost + nextCost > availableGold) break;
+    totalCost += nextCost;
+    level++;
+  }
+  
+  return { totalCost, finalLevel: level, levelsBought: level - currentLevel };
+}
+
+/**
+ * Purchase multiple levels of an upgrade
+ * @param {number} guildId - Guild ID
+ * @param {number} upgradeId - Upgrade ID
+ * @param {number} levelsToBuy - Number of levels to purchase
+ * @param {number} totalCost - Total gold cost
+ * @returns {Promise<Object>} The guild_upgrade record
+ */
+export async function purchaseUpgradeMultiple(guildId, upgradeId, levelsToBuy, totalCost) {
+  const client = await getClient();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Deduct gold
+    const goldResult = await client.query(
+      'UPDATE guilds SET gold = gold - $2 WHERE id = $1 AND gold >= $2 RETURNING *',
+      [guildId, totalCost]
+    );
+    
+    if (!goldResult.rows[0]) {
+      throw new Error('Insufficient gold');
+    }
+    
+    // Get current level
+    const currentResult = await client.query(
+      'SELECT level FROM guild_upgrades WHERE guild_id = $1 AND upgrade_id = $2',
+      [guildId, upgradeId]
+    );
+    const currentLevel = currentResult.rows[0]?.level || 0;
+    const newLevel = currentLevel + levelsToBuy;
+    
+    // Insert or update the upgrade
+    const upgradeResult = await client.query(
+      `INSERT INTO guild_upgrades (guild_id, upgrade_id, level)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id, upgrade_id) 
+       DO UPDATE SET level = $3, purchased_at = NOW()
+       RETURNING *`,
+      [guildId, upgradeId, newLevel]
+    );
+    
+    await client.query('COMMIT');
+    return { 
+      ...upgradeResult.rows[0], 
+      remainingGold: goldResult.rows[0].gold 
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Get available upgrades for a guild (that they can see/purchase)
  * @param {number} guildId - Guild ID
  * @param {number} guildLevel - Guild's current level

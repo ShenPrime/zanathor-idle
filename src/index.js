@@ -134,6 +134,75 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Handle buy modal submissions
+    if (interaction.customId.startsWith('buy_modal:')) {
+      try {
+        await buyCommand.handleModal(interaction);
+      } catch (error) {
+        console.error('Error handling buy modal:', error);
+        
+        if (!interaction.replied) {
+          await interaction.reply({
+            content: 'There was an error processing your purchase. Please try again.',
+            ephemeral: true,
+          });
+        }
+      }
+    }
+  }
+  
+  // Handle select menu interactions
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId.startsWith('buy_select:')) {
+      try {
+        await buyCommand.handleSelectMenu(interaction);
+      } catch (error) {
+        console.error('Error handling buy select menu:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error with your selection. Please try again.',
+            ephemeral: true,
+          });
+        }
+      }
+    }
+  }
+  
+  // Handle button interactions
+  if (interaction.isButton()) {
+    // Buy category buttons
+    if (interaction.customId.startsWith('buy_category:')) {
+      try {
+        await buyCommand.handleCategoryButton(interaction);
+      } catch (error) {
+        console.error('Error handling buy category button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.update({
+            content: 'There was an error. Please try again.',
+            components: [],
+          });
+        }
+      }
+    }
+    
+    // Buy again button
+    if (interaction.customId === 'buy_again') {
+      try {
+        await buyCommand.handleBuyAgain(interaction);
+      } catch (error) {
+        console.error('Error handling buy again button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.update({
+            content: 'There was an error. Please use /buy to try again.',
+            components: [],
+          });
+        }
+      }
+    }
   }
 });
 

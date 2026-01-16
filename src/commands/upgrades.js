@@ -48,5 +48,5 @@ export async function execute(interaction) {
   const displayCategory = category || 'all';
   const embed = createUpgradesEmbed(upgrades, displayCategory, guild.gold);
   
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }

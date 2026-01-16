@@ -58,5 +58,5 @@ export async function execute(interaction) {
     )
     .setFooter({ text: 'Good luck, Guild Master!' });
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
