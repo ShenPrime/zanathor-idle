@@ -1,0 +1,21 @@
+{
+  "name": "zanathor",
+  "version": "1.0.0",
+  "description": "Zanathor - An Adventurer's Guild idle game Discord bot",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/database/migrate.js",
+    "seed": "node src/database/seed.js"
+  },
+  "keywords": ["discord", "bot", "idle", "game", "rpg"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3"
+  }
+}

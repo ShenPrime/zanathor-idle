@@ -1,0 +1,108 @@
+import 'dotenv/config';
+import pg from 'pg';
+import { DATABASE_URL } from '../config.js';
+
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+});
+
+const migrations = [
+  {
+    name: '001_initial_schema',
+    sql: `
+      -- Guilds table (player data)
+      CREATE TABLE IF NOT EXISTS guilds (
+        id SERIAL PRIMARY KEY,
+        discord_id VARCHAR(32) UNIQUE NOT NULL,
+        name VARCHAR(64) NOT NULL,
+        level INTEGER DEFAULT 1,
+        xp BIGINT DEFAULT 0,
+        gold BIGINT DEFAULT 0,
+        adventurer_count INTEGER DEFAULT 3,
+        adventurer_capacity INTEGER DEFAULT 5,
+        last_collected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      -- Index for faster Discord ID lookups
+      CREATE INDEX IF NOT EXISTS idx_guilds_discord_id ON guilds(discord_id);
+      
+      -- Indexes for leaderboards
+      CREATE INDEX IF NOT EXISTS idx_guilds_gold ON guilds(gold DESC);
+      CREATE INDEX IF NOT EXISTS idx_guilds_level ON guilds(level DESC);
+
+      -- Upgrades table (definitions)
+      CREATE TABLE IF NOT EXISTS upgrades (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(64) UNIQUE NOT NULL,
+        description TEXT,
+        category VARCHAR(32) NOT NULL,
+        base_cost BIGINT NOT NULL,
+        cost_multiplier DECIMAL(10,4) DEFAULT 1.15,
+        effect_type VARCHAR(32) NOT NULL,
+        effect_value DECIMAL(10,4) NOT NULL,
+        max_level INTEGER,
+        required_guild_level INTEGER DEFAULT 1,
+        required_adventurer_count INTEGER DEFAULT 0,
+        required_upgrade_id INTEGER REFERENCES upgrades(id)
+      );
+
+      -- Guild upgrades (what each guild owns)
+      CREATE TABLE IF NOT EXISTS guild_upgrades (
+        guild_id INTEGER REFERENCES guilds(id) ON DELETE CASCADE,
+        upgrade_id INTEGER REFERENCES upgrades(id) ON DELETE CASCADE,
+        level INTEGER DEFAULT 1,
+        purchased_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (guild_id, upgrade_id)
+      );
+
+      -- Migrations tracking table
+      CREATE TABLE IF NOT EXISTS migrations (
+        name VARCHAR(128) PRIMARY KEY,
+        applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `,
+  },
+];
+
+async function migrate() {
+  console.log('Starting database migration...\n');
+
+  try {
+    // Ensure migrations table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        name VARCHAR(128) PRIMARY KEY,
+        applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+
+    // Get already applied migrations
+    const { rows: applied } = await pool.query('SELECT name FROM migrations');
+    const appliedNames = new Set(applied.map((r) => r.name));
+
+    // Run pending migrations
+    for (const migration of migrations) {
+      if (appliedNames.has(migration.name)) {
+        console.log(`✓ ${migration.name} (already applied)`);
+        continue;
+      }
+
+      console.log(`→ Running ${migration.name}...`);
+      await pool.query(migration.sql);
+      await pool.query('INSERT INTO migrations (name) VALUES ($1)', [migration.name]);
+      console.log(`✓ ${migration.name} applied successfully`);
+    }
+
+    console.log('\nMigration complete!');
+  } catch (error) {
+    console.error('Migration failed:', error.message);
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+}
+
+migrate();
