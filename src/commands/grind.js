@@ -22,6 +22,9 @@ const grindSessions = new Map();
 // Flush timeout duration in milliseconds
 const FLUSH_DELAY_MS = 3000;
 
+// Discord interaction tokens expire after 15 minutes
+const INTERACTION_TOKEN_LIFETIME_MS = 15 * 60 * 1000;
+
 /**
  * @typedef {Object} GrindSession
  * @property {string} odId - Discord user ID
@@ -39,6 +42,7 @@ const FLUSH_DELAY_MS = 3000;
  * @property {number} lastClickTime - Timestamp of last click
  * @property {NodeJS.Timeout|null} flushTimeout - Pending flush timeout
  * @property {Function|null} updateEmbed - Function to update the embed
+ * @property {number} interactionCreatedAt - Timestamp when interaction was created
  */
 
 export const data = new SlashCommandBuilder()
@@ -93,6 +97,7 @@ export async function execute(interaction) {
     lastClickTime: Date.now(),
     flushTimeout: null,
     updateEmbed: null,
+    interactionCreatedAt: Date.now(), // Track when interaction was created for token expiry
   };
   
   grindSessions.set(odId, session);
@@ -119,6 +124,13 @@ export async function execute(interaction) {
   
   // Store the update function in the session
   session.updateEmbed = async (newEmbed, disableButton = false) => {
+    // Check if interaction token is still valid (expires after 15 minutes)
+    const tokenAge = Date.now() - session.interactionCreatedAt;
+    if (tokenAge >= INTERACTION_TOKEN_LIFETIME_MS - 5000) {
+      // Token expired or about to expire, skip update
+      return;
+    }
+    
     try {
       const components = disableButton ? [createGrindButton(true)] : [row];
       await interaction.editReply({
@@ -126,7 +138,11 @@ export async function execute(interaction) {
         components,
       });
     } catch (error) {
-      // Interaction may have expired
+      // Interaction may have expired unexpectedly
+      if (error.code === 10015 || error.message?.includes('Unknown Webhook') || error.message?.includes('Invalid Webhook Token')) {
+        // Token expired, silently ignore
+        return;
+      }
       console.error('Failed to update grind embed:', error.message);
     }
   };
