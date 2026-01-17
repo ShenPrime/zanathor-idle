@@ -14,12 +14,14 @@ const DAILY_BATTLE_LIMIT = 999;
 const MINIMUM_BET = 0;
 
 // Power ratio thresholds for battle balancing
-const POWER_RATIO_AUTO_FULL = 3;     // < 3x: auto-battle with full losses
-const POWER_RATIO_AUTO_CAPPED = 5;   // 3-5x: auto-battle with losses capped at 2x bet
-                                      // > 5x: requires defender consent, losses capped at 1x bet
+const POWER_RATIO_CAPPED = 3;        // >= 3x: stronger player's winnings capped to 1-5% of weaker's gold
+const POWER_RATIO_CONSENT = 5;       // >= 5x: requires defender consent + free revenge option
 
 // Consent timeout in milliseconds
 const CONSENT_TIMEOUT_MS = 30 * 1000; // 30 seconds
+
+// Free revenge timeout in milliseconds
+const FREE_REVENGE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Calculate guild power for battle
@@ -82,47 +84,90 @@ export function calculatePowerRatio(power1, power2) {
 /**
  * Determine battle type based on power ratio
  * @param {number} powerRatio - Power ratio between guilds
- * @returns {{ type: 'auto_full' | 'auto_capped' | 'consent', lossCap: number }}
+ * @returns {{ type: 'normal' | 'capped' | 'consent', requiresConsent: boolean, isCapped: boolean, freeRevenge: boolean }}
  */
 export function getBattleType(powerRatio) {
-  if (powerRatio < POWER_RATIO_AUTO_FULL) {
-    return { type: 'auto_full', lossCap: Infinity };
-  } else if (powerRatio < POWER_RATIO_AUTO_CAPPED) {
-    return { type: 'auto_capped', lossCap: 2 }; // Cap at 2x bet
+  if (powerRatio < POWER_RATIO_CAPPED) {
+    return { type: 'normal', requiresConsent: false, isCapped: false, freeRevenge: false };
+  } else if (powerRatio < POWER_RATIO_CONSENT) {
+    return { type: 'capped', requiresConsent: false, isCapped: true, freeRevenge: false };
   } else {
-    return { type: 'consent', lossCap: 1 }; // Cap at 1x bet, requires consent
+    return { type: 'consent', requiresConsent: true, isCapped: true, freeRevenge: true };
   }
 }
 
 /**
- * Calculate loser's losses with optional cap based on bet amount
- * Gold: 5-10% of current gold (capped if power disparity)
- * XP: 2-5% of current XP (capped proportionally)
- * @param {Object} loserGuild - Loser's guild
- * @param {number} betAmount - The bet amount
- * @param {number} lossCap - Multiplier cap (e.g., 2 = max 2x bet, Infinity = no cap)
- * @returns {{ goldLoss: number, xpLoss: number, wasCapped: boolean }}
+ * Calculate battle rewards based on new system:
+ * - Winner takes bet from loser (or capped amount if power disparity)
+ * - Winner gets flat 1-5% XP bonus
+ * 
+ * @param {Object} params - Battle parameters
+ * @param {number} params.betAmount - The bet amount
+ * @param {Object} params.loserGuild - Loser's guild
+ * @param {boolean} params.strongerWon - Whether the stronger player won
+ * @param {boolean} params.isCapped - Whether power disparity cap applies
+ * @returns {{ goldTransfer: number, xpBonus: number, wasCapped: boolean }}
  */
-export function calculateLosses(loserGuild, betAmount = 0, lossCap = Infinity) {
-  const goldPercent = 5 + Math.random() * 5; // 5-10%
-  const xpPercent = 2 + Math.random() * 3; // 2-5%
+export function calculateBattleRewards({ betAmount, loserGuild, strongerWon, isCapped }) {
+  // XP bonus for winner: flat 1-5%
+  const xpPercent = 1 + Math.random() * 4; // 1-5%
+  const xpBonus = Math.floor(Number(loserGuild.xp) * (xpPercent / 100));
   
-  let goldLoss = Math.floor(Number(loserGuild.gold) * (goldPercent / 100));
-  let xpLoss = Math.floor(Number(loserGuild.xp) * (xpPercent / 100));
-  
-  // Apply cap if needed
-  const maxGoldLoss = lossCap === Infinity ? Infinity : betAmount * lossCap;
+  // Gold transfer: normally the bet amount
+  let goldTransfer = betAmount;
   let wasCapped = false;
   
-  if (goldLoss > maxGoldLoss) {
-    // Scale XP loss proportionally when gold is capped
-    const scaleFactor = maxGoldLoss / goldLoss;
-    goldLoss = Math.floor(maxGoldLoss);
-    xpLoss = Math.floor(xpLoss * scaleFactor);
-    wasCapped = true;
+  // If stronger player won AND power disparity is >= 3x, cap winnings to 1-5% of loser's gold
+  if (strongerWon && isCapped) {
+    const cappedPercent = 1 + Math.random() * 4; // 1-5%
+    const cappedAmount = Math.floor(Number(loserGuild.gold) * (cappedPercent / 100));
+    
+    if (cappedAmount < betAmount) {
+      goldTransfer = cappedAmount;
+      wasCapped = true;
+    }
   }
   
-  return { goldLoss, xpLoss, wasCapped };
+  // Can't take more than the loser has
+  goldTransfer = Math.min(goldTransfer, Number(loserGuild.gold));
+  
+  return { goldTransfer, xpBonus, wasCapped };
+}
+
+/**
+ * Calculate free revenge rewards (when defender counter-attacks for free)
+ * Winner gets 1-2% of opponent's gold, loser loses nothing
+ * 
+ * @param {Object} attackerGuild - Original attacker's guild (now being counter-attacked)
+ * @returns {{ goldReward: number, xpBonus: number }}
+ */
+export function calculateFreeRevengeRewards(attackerGuild) {
+  const goldPercent = 1 + Math.random(); // 1-2%
+  const goldReward = Math.floor(Number(attackerGuild.gold) * (goldPercent / 100));
+  
+  // Small XP bonus
+  const xpPercent = 1 + Math.random(); // 1-2%
+  const xpBonus = Math.floor(Number(attackerGuild.xp) * (xpPercent / 100));
+  
+  return { goldReward, xpBonus };
+}
+
+/**
+ * Get the free revenge timeout in milliseconds
+ * @returns {number} Timeout in ms
+ */
+export function getFreeRevengeTimeout() {
+  return FREE_REVENGE_TIMEOUT_MS;
+}
+
+/**
+ * Check if free revenge is still valid (within 5 minute window)
+ * @param {number} battleTimestamp - Timestamp when original battle occurred
+ * @returns {boolean} True if free revenge is still available
+ */
+export function isFreeRevengeValid(battleTimestamp) {
+  const now = Date.now();
+  return (now - battleTimestamp) < FREE_REVENGE_TIMEOUT_MS;
 }
 
 /**
@@ -250,36 +295,23 @@ export async function recordBattle({
 }
 
 /**
- * Apply battle results to guilds
+ * Apply battle results to guilds (new system: winner takes bet from loser)
  * @param {number} winnerId - Winner's guild ID
  * @param {number} loserId - Loser's guild ID
- * @param {number} betAmount - Bet amount (returned to winner if attacker won)
- * @param {number} goldTransferred - Gold loser lost
- * @param {number} xpTransferred - XP loser lost
- * @param {boolean} attackerWon - Whether attacker won
- * @param {number} attackerId - Attacker's guild ID (for bet logic)
+ * @param {number} goldTransfer - Gold transferred from loser to winner
+ * @param {number} xpBonus - XP bonus for winner (not taken from loser)
  */
-export async function applyBattleResults(winnerId, loserId, betAmount, goldTransferred, xpTransferred, attackerWon, attackerId) {
-  // Winner gains gold and XP
-  // If attacker won: they get bet returned + goldTransferred + xpTransferred
-  // If defender won: they get the bet + goldTransferred + xpTransferred
-  
-  const winnerGetsGold = attackerWon ? goldTransferred : betAmount + goldTransferred;
-  
+export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonus) {
+  // Winner gains gold and XP bonus
   await query(
     `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
-    [winnerId, winnerGetsGold, xpTransferred]
+    [winnerId, goldTransfer, xpBonus]
   );
   
-  // Loser loses gold and XP
-  // If attacker lost: they lose the bet + goldTransferred + xpTransferred
-  // If defender lost: they lose goldTransferred + xpTransferred
-  
-  const loserLosesGold = attackerWon ? goldTransferred : betAmount + goldTransferred;
-  
+  // Loser loses gold (no XP loss in new system)
   await query(
-    `UPDATE guilds SET gold = GREATEST(0, gold - $2), xp = GREATEST(0, xp - $3) WHERE id = $1`,
-    [loserId, loserLosesGold, xpTransferred]
+    `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
+    [loserId, goldTransfer]
   );
   
   // Update lifetime stats for winner
@@ -289,18 +321,71 @@ export async function applyBattleResults(winnerId, loserId, betAmount, goldTrans
        lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
        lifetime_battle_xp_won = lifetime_battle_xp_won + $3
      WHERE id = $1`,
-    [winnerId, winnerGetsGold, xpTransferred]
+    [winnerId, goldTransfer, xpBonus]
   );
   
   // Update lifetime stats for loser
   await query(
     `UPDATE guilds SET 
        lifetime_battles_lost = lifetime_battles_lost + 1,
-       lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2,
-       lifetime_battle_xp_lost = lifetime_battle_xp_lost + $3
+       lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
      WHERE id = $1`,
-    [loserId, loserLosesGold, xpTransferred]
+    [loserId, goldTransfer]
   );
+}
+
+/**
+ * Apply free revenge battle results
+ * If defender wins: gets gold from attacker, attacker loses gold
+ * If defender loses: nothing happens (free revenge has no cost)
+ * @param {number} defenderId - Original defender's guild ID (counter-attacker)
+ * @param {number} attackerId - Original attacker's guild ID (being counter-attacked)
+ * @param {boolean} defenderWon - Whether the defender won the free revenge
+ * @param {number} goldReward - Gold reward if defender wins
+ * @param {number} xpBonus - XP bonus if defender wins
+ */
+export async function applyFreeRevengeResults(defenderId, attackerId, defenderWon, goldReward, xpBonus) {
+  if (defenderWon) {
+    // Defender wins: gets gold and XP from attacker
+    await query(
+      `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
+      [defenderId, goldReward, xpBonus]
+    );
+    
+    await query(
+      `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
+      [attackerId, goldReward]
+    );
+    
+    // Update lifetime stats
+    await query(
+      `UPDATE guilds SET 
+         lifetime_battles_won = lifetime_battles_won + 1,
+         lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
+         lifetime_battle_xp_won = lifetime_battle_xp_won + $3
+       WHERE id = $1`,
+      [defenderId, goldReward, xpBonus]
+    );
+    
+    await query(
+      `UPDATE guilds SET 
+         lifetime_battles_lost = lifetime_battles_lost + 1,
+         lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
+       WHERE id = $1`,
+      [attackerId, goldReward]
+    );
+  } else {
+    // Defender loses: nothing happens (free revenge), but still count as a loss
+    await query(
+      `UPDATE guilds SET lifetime_battles_lost = lifetime_battles_lost + 1 WHERE id = $1`,
+      [defenderId]
+    );
+    
+    await query(
+      `UPDATE guilds SET lifetime_battles_won = lifetime_battles_won + 1 WHERE id = $1`,
+      [attackerId]
+    );
+  }
 }
 
 /**
@@ -388,11 +473,11 @@ export async function unlockBetGold(guildId, amount) {
 
 /**
  * Get power ratio thresholds for display
- * @returns {{ autoFull: number, autoCapped: number }}
+ * @returns {{ capped: number, consent: number }}
  */
 export function getPowerRatioThresholds() {
   return {
-    autoFull: POWER_RATIO_AUTO_FULL,
-    autoCapped: POWER_RATIO_AUTO_CAPPED,
+    capped: POWER_RATIO_CAPPED,
+    consent: POWER_RATIO_CONSENT,
   };
 }

@@ -172,6 +172,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Handle battle counter-attack modal submissions
+    if (interaction.customId.startsWith('battle_counter_modal:')) {
+      try {
+        await battleCommand.handleCounterAttackModal(interaction);
+      } catch (error) {
+        console.error('Error handling counter-attack modal:', error);
+        
+        if (!interaction.replied) {
+          await interaction.reply({
+            content: 'There was an error processing your counter-attack. Please try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
   }
   
   // Handle select menu interactions
@@ -226,7 +242,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
     
-    // Battle counter-attack button
+    // Battle counter-attack button (opens modal)
     if (interaction.customId.startsWith('battle_counter:')) {
       try {
         await battleCommand.handleCounterAttack(interaction);
@@ -236,6 +252,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: 'There was an error processing the counter-attack. Please use /battle to try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Battle match bet button (instant counter with same bet)
+    if (interaction.customId.startsWith('battle_match:')) {
+      try {
+        await battleCommand.handleMatchBet(interaction);
+      } catch (error) {
+        console.error('Error handling match bet button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error processing the counter-attack. Please use /battle to try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Battle free revenge button (no bet required)
+    if (interaction.customId.startsWith('battle_free_revenge:')) {
+      try {
+        await battleCommand.handleFreeRevenge(interaction);
+      } catch (error) {
+        console.error('Error handling free revenge button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error processing free revenge. Please try again.',
             flags: MessageFlags.Ephemeral,
           });
         }
