@@ -492,6 +492,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`\nLogged in as ${readyClient.user.tag}!`);
   console.log(`Bot is in ${readyClient.guilds.cache.size} server(s)`);
+  console.log('Guild IDs:', readyClient.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
+  console.log('DEV_GUILD_ID from env:', process.env.DEV_GUILD_ID);
   
   // Start the reminder checker
   startReminderChecker(client);
