@@ -86,7 +86,16 @@ export async function execute(interaction) {
   // Add warning if time was capped
   if (earnings.wasCapped) {
     embed.setFooter({ 
-      text: `Maximum idle time reached (24h). Collect more often to maximize earnings!` 
+      text: `Maximum idle time reached (${earnings.maxIdleHours}h). Collect more often to maximize earnings!` 
+    });
+  }
+  
+  // Add double gold notification
+  if (earnings.doubledGold) {
+    embed.addFields({
+      name: 'LUCKY COIN!',
+      value: `Your Lucky Coin activated - **DOUBLE GOLD** this collection!`,
+      inline: false,
     });
   }
   

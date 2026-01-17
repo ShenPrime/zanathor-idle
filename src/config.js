@@ -28,6 +28,18 @@ export const GAME = {
   XP_LEVEL_MULTIPLIER: 1.35,      // Slower scaling
 };
 
+// Prestige System Constants
+export const PRESTIGE = {
+  MIN_LEVEL: 50,                  // First prestige at level 50
+  LEVEL_INCREMENT: 10,            // Each prestige requires 10 more levels
+  MAX_REQUIREMENT: 75,            // Cap requirement at level 75
+  
+  // Compounding bonuses per prestige level
+  GOLD_BONUS_PER_LEVEL: 0.05,     // +5% gold per prestige (compounds)
+  XP_BONUS_PER_LEVEL: 0.05,       // +5% XP per prestige (compounds)
+  RECRUIT_BONUS_PER_LEVEL: 0.08,  // +8% recruitment rate per prestige (compounds)
+};
+
 // Adventurer Ranks - unlock at certain guild levels
 export const RANKS = [
   { name: 'Bronze',   level: 1,   multiplier: 1.0,  emoji: '🥉' },

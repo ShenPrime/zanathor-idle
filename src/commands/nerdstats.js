@@ -93,6 +93,27 @@ export async function execute(interaction) {
         inline: false,
       },
       {
+        name: 'PRESTIGE',
+        value: (() => {
+          const prestigeLevel = guild.prestige_level || 0;
+          const lifetimePrestiges = guild.lifetime_prestiges || 0;
+          const totalPointsEarned = guild.total_prestige_points_earned || 0;
+          const currentPoints = guild.prestige_points || 0;
+          
+          if (lifetimePrestiges === 0) {
+            return '*Not yet prestiged*';
+          }
+          
+          return [
+            `Current Prestige: **${prestigeLevel}**`,
+            `Lifetime Prestiges: **${formatNumber(lifetimePrestiges)}**`,
+            `Points Available: **${currentPoints}**`,
+            `Total Points Earned: **${formatNumber(totalPointsEarned)}**`,
+          ].join('\n');
+        })(),
+        inline: false,
+      },
+      {
         name: 'TIME',
         value: [
           `Guild Founded: **${createdDateText}**`,

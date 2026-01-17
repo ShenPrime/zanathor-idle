@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
+import { getOwnedPrestigeUpgrades } from '../database/prestige.js';
 import { createGuildEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { calculateRates, calculateUpgradeBonuses, getEffectiveCapacity, calculateIdleEarnings } from '../game/idle.js';
+import { calculateRates, calculateUpgradeBonuses, calculatePrestigeBonuses, getEffectiveCapacity, calculateIdleEarnings } from '../game/idle.js';
 
 export const data = new SlashCommandBuilder()
   .setName('guild')
@@ -21,7 +22,12 @@ export async function execute(interaction) {
   // Get upgrades and calculate bonuses
   const upgrades = await getGuildUpgrades(guild.id);
   const bonuses = calculateUpgradeBonuses(upgrades);
-  const rates = calculateRates(guild, bonuses);
+  
+  // Get prestige upgrades and calculate prestige bonuses
+  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+  const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
+  
+  const rates = calculateRates(guild, bonuses, prestigeBonuses);
   
   // Calculate pending earnings
   const pendingEarnings = await calculateIdleEarnings(guild);
@@ -34,6 +40,6 @@ export async function execute(interaction) {
   };
   
   await interaction.reply({
-    embeds: [createGuildEmbed(displayGuild, rates, pendingEarnings)],
+    embeds: [createGuildEmbed(displayGuild, rates, pendingEarnings, prestigeBonuses)],
   });
 }

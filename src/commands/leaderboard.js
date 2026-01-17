@@ -52,9 +52,23 @@ const CATEGORIES = {
     unit: '',
     emptyMessage: 'No battles fought yet!',
   },
+  prestige_level: {
+    field: 'prestige_level',
+    emoji: '🌟',
+    title: 'Most Prestigious',
+    subtitle: 'Times reborn',
+    formatValue: (guild) => {
+      const level = guild.prestige_level || 0;
+      if (level === 0) return 'Not Prestiged';
+      const stars = '⭐'.repeat(Math.min(level, 5));
+      return `${stars} P${level}`;
+    },
+    unit: '',
+    emptyMessage: 'No one has prestiged yet!',
+  },
 };
 
-const CATEGORY_ORDER = ['gold', 'level', 'adventurer_count', 'lifetime_gold_earned', 'lifetime_battles_won'];
+const CATEGORY_ORDER = ['gold', 'level', 'adventurer_count', 'lifetime_gold_earned', 'lifetime_battles_won', 'prestige_level'];
 
 export const data = new SlashCommandBuilder()
   .setName('leaderboard')
@@ -84,10 +98,11 @@ async function showLeaderboard(interaction, categoryKey, isUpdate = false) {
     playerRank = await getPlayerRank(interaction.user.id, category.field);
   }
   
-  // Check if this category has any data (for conquest)
+  // Check if this category has any data (for conquest and prestige)
   const hasData = topGuilds.length > 0 && (
-    categoryKey !== 'lifetime_battles_won' || 
-    topGuilds.some(g => (g.lifetime_battles_won || 0) > 0)
+    (categoryKey !== 'lifetime_battles_won' && categoryKey !== 'prestige_level') || 
+    (categoryKey === 'lifetime_battles_won' && topGuilds.some(g => (g.lifetime_battles_won || 0) > 0)) ||
+    (categoryKey === 'prestige_level' && topGuilds.some(g => (g.prestige_level || 0) > 0))
   );
   
   // Build the embed
@@ -198,6 +213,7 @@ function buildCategoryButtons(activeCategory) {
     adventurer_count: 'Size',
     lifetime_gold_earned: 'Earnings',
     lifetime_battles_won: 'Conquest',
+    prestige_level: 'Prestige',
   };
   
   for (const key of CATEGORY_ORDER) {

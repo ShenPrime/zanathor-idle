@@ -138,6 +138,40 @@ const migrations = [
       ADD COLUMN IF NOT EXISTS battle_notifications_enabled BOOLEAN DEFAULT FALSE;
     `,
   },
+  {
+    name: '006_prestige_system',
+    sql: `
+      -- Add prestige columns to guilds
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS prestige_level INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS prestige_points INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS total_prestige_points_earned INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS lifetime_prestiges INTEGER DEFAULT 0;
+      ALTER TABLE guilds ADD COLUMN IF NOT EXISTS auto_prestige_enabled BOOLEAN DEFAULT FALSE;
+
+      -- Prestige upgrades definitions (permanent unlocks)
+      CREATE TABLE IF NOT EXISTS prestige_upgrades (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(64) UNIQUE NOT NULL,
+        description TEXT,
+        effect_type VARCHAR(32) NOT NULL,
+        effect_value DECIMAL(10,4) NOT NULL,
+        max_level INTEGER DEFAULT 1,
+        point_costs INTEGER[] NOT NULL
+      );
+
+      -- Guild's purchased prestige upgrades
+      CREATE TABLE IF NOT EXISTS guild_prestige_upgrades (
+        guild_id INTEGER REFERENCES guilds(id) ON DELETE CASCADE,
+        prestige_upgrade_id INTEGER REFERENCES prestige_upgrades(id) ON DELETE CASCADE,
+        level INTEGER DEFAULT 1,
+        purchased_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (guild_id, prestige_upgrade_id)
+      );
+
+      -- Index for prestige leaderboard
+      CREATE INDEX IF NOT EXISTS idx_guilds_prestige ON guilds(prestige_level DESC, total_prestige_points_earned DESC);
+    `,
+  },
 ];
 
 async function migrate() {

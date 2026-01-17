@@ -25,6 +25,7 @@ import * as nerdstatsCommand from './commands/nerdstats.js';
 import * as battleCommand from './commands/battle.js';
 import * as battlesCommand from './commands/battles.js';
 import * as watchCommand from './commands/watch.js';
+import * as prestigeCommand from './commands/prestige.js';
 
 // Import jobs
 import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
@@ -62,6 +63,7 @@ const commands = [
   battleCommand,
   battlesCommand,
   watchCommand,
+  prestigeCommand,
 ];
 
 // Register commands in collection
@@ -190,6 +192,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
     }
+    
+    // Handle prestige confirmation modal
+    if (interaction.customId === 'prestige_confirm_modal') {
+      try {
+        await prestigeCommand.handlePrestigeConfirmModal(interaction);
+      } catch (error) {
+        console.error('Error handling prestige confirm modal:', error);
+        
+        if (!interaction.replied) {
+          await interaction.reply({
+            content: 'There was an error processing your prestige. Please try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
   }
   
   // Handle select menu interactions
@@ -203,6 +221,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: 'There was an error with your selection. Please try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Prestige shop buy select
+    if (interaction.customId === 'prestige_buy_select') {
+      try {
+        await prestigeCommand.handlePrestigeBuySelect(interaction);
+      } catch (error) {
+        console.error('Error handling prestige buy select:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error with your purchase. Please try again.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -476,6 +510,63 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: 'There was an error. Please try /leaderboard again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Prestige buttons
+    if (interaction.customId === 'prestige_now') {
+      try {
+        await prestigeCommand.handlePrestigeNow(interaction);
+      } catch (error) {
+        console.error('Error handling prestige now button:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error. Please try /prestige again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'prestige_auto_toggle') {
+      try {
+        await prestigeCommand.handleAutoPrestigeToggle(interaction);
+      } catch (error) {
+        console.error('Error handling auto prestige toggle:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error toggling auto-prestige.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'prestige_shop_view') {
+      try {
+        await prestigeCommand.handleShopView(interaction);
+      } catch (error) {
+        console.error('Error handling prestige shop view:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error opening the shop.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    if (interaction.customId === 'prestige_back_status') {
+      try {
+        await prestigeCommand.handleBackToStatus(interaction);
+      } catch (error) {
+        console.error('Error handling prestige back to status:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error.',
             flags: MessageFlags.Ephemeral,
           });
         }

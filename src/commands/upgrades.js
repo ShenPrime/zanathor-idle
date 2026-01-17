@@ -3,7 +3,7 @@ import { getGuildByDiscordId } from '../database/guilds.js';
 import { getAvailableUpgrades } from '../database/upgrades.js';
 import { createUpgradesEmbed, createErrorEmbed } from '../utils/embeds.js';
 
-const CATEGORIES = ['recruitment', 'equipment', 'facilities', 'missions'];
+const CATEGORIES = ['recruitment', 'equipment', 'facilities', 'missions', 'magic', 'trade'];
 
 export const data = new SlashCommandBuilder()
   .setName('upgrades')
@@ -17,7 +17,9 @@ export const data = new SlashCommandBuilder()
         { name: 'Recruitment - Increase adventurer capacity', value: 'recruitment' },
         { name: 'Equipment - Boost gold generation', value: 'equipment' },
         { name: 'Facilities - Improve XP and unlock features', value: 'facilities' },
-        { name: 'Missions - Higher tier passive income', value: 'missions' }
+        { name: 'Missions - Higher tier passive income', value: 'missions' },
+        { name: 'Magic - XP and special bonuses', value: 'magic' },
+        { name: 'Trade - Gold income and multipliers', value: 'trade' }
       )
   );
 

@@ -1,5 +1,6 @@
-import { GAME, getRankForLevel } from '../config.js';
+import { GAME, PRESTIGE, getRankForLevel } from '../config.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
+import { getOwnedPrestigeUpgrades, getPrestigeUpgradeEffect } from '../database/prestige.js';
 
 /**
  * Calculate the bonuses from all upgrades a guild owns
@@ -55,12 +56,83 @@ export function calculateUpgradeBonuses(upgrades) {
 }
 
 /**
+ * Calculate prestige bonuses from prestige level and prestige upgrades
+ * @param {Object} guild - Guild data (needs prestige_level)
+ * @param {Array} prestigeUpgrades - Guild's prestige upgrades
+ * @returns {Object} Prestige bonus multipliers
+ */
+export function calculatePrestigeBonuses(guild, prestigeUpgrades = []) {
+  const bonuses = {
+    goldMultiplier: 1.0,
+    xpMultiplier: 1.0,
+    recruitmentMultiplier: 1.0,
+    maxIdleHoursBonus: 0,
+    doubleGoldChance: 0,
+  };
+
+  const prestigeLevel = guild.prestige_level || 0;
+
+  // Base prestige bonuses (compound)
+  if (prestigeLevel > 0) {
+    bonuses.goldMultiplier = Math.pow(1 + PRESTIGE.GOLD_BONUS_PER_LEVEL, prestigeLevel);
+    bonuses.xpMultiplier = Math.pow(1 + PRESTIGE.XP_BONUS_PER_LEVEL, prestigeLevel);
+    bonuses.recruitmentMultiplier = Math.pow(1 + PRESTIGE.RECRUIT_BONUS_PER_LEVEL, prestigeLevel);
+  }
+
+  // Apply prestige upgrade effects
+  for (const upgrade of prestigeUpgrades) {
+    const level = upgrade.level || 0;
+    if (level === 0) continue;
+
+    const value = parseFloat(upgrade.effect_value);
+
+    switch (upgrade.effect_type) {
+      case 'permanent_gold_multiplier':
+        // Compounds: (1.08)^level
+        bonuses.goldMultiplier *= Math.pow(1 + value, level);
+        break;
+
+      case 'permanent_xp_multiplier':
+        // Compounds: (1.08)^level
+        bonuses.xpMultiplier *= Math.pow(1 + value, level);
+        break;
+
+      case 'max_idle_hours':
+        // +2/4/8 hours (cumulative based on level)
+        const hourBonuses = [2, 2, 4]; // Level 1: +2, Level 2: +4, Level 3: +8 total
+        for (let i = 0; i < level; i++) {
+          bonuses.maxIdleHoursBonus += hourBonuses[i] || 0;
+        }
+        break;
+
+      case 'double_gold_chance':
+        // +2% per level
+        bonuses.doubleGoldChance += value * level;
+        break;
+
+      case 'xp_per_prestige':
+        // +2% XP per prestige level
+        bonuses.xpMultiplier *= 1 + (value * prestigeLevel);
+        break;
+
+      case 'gold_per_prestige':
+        // +2% gold per prestige level
+        bonuses.goldMultiplier *= 1 + (value * prestigeLevel);
+        break;
+    }
+  }
+
+  return bonuses;
+}
+
+/**
  * Calculate gold and XP generation rates for a guild
  * @param {Object} guild - Guild data
  * @param {Object} bonuses - Calculated upgrade bonuses
+ * @param {Object} prestigeBonuses - Calculated prestige bonuses (optional)
  * @returns {Object} Gold and XP per hour
  */
-export function calculateRates(guild, bonuses) {
+export function calculateRates(guild, bonuses, prestigeBonuses = null) {
   const rank = getRankForLevel(guild.level);
 
   // Base gold = (adventurers * base rate * rank multiplier) + flat bonuses
@@ -69,16 +141,29 @@ export function calculateRates(guild, bonuses) {
     bonuses.baseGoldPerHour;
 
   // Apply gold multiplier from upgrades
-  const goldPerHour = Math.floor(baseGoldPerHour * bonuses.goldMultiplier);
+  let goldPerHour = baseGoldPerHour * bonuses.goldMultiplier;
+
+  // Apply prestige gold multiplier
+  if (prestigeBonuses) {
+    goldPerHour *= prestigeBonuses.goldMultiplier;
+  }
 
   // Base XP = (adventurers * base rate) + flat bonuses
   const baseXpPerHour =
     guild.adventurer_count * GAME.BASE_XP_PER_HOUR + bonuses.baseXpPerHour;
 
   // Apply XP multiplier from upgrades
-  const xpPerHour = Math.floor(baseXpPerHour * bonuses.xpMultiplier);
+  let xpPerHour = baseXpPerHour * bonuses.xpMultiplier;
 
-  return { goldPerHour, xpPerHour };
+  // Apply prestige XP multiplier
+  if (prestigeBonuses) {
+    xpPerHour *= prestigeBonuses.xpMultiplier;
+  }
+
+  return {
+    goldPerHour: Math.floor(goldPerHour),
+    xpPerHour: Math.floor(xpPerHour),
+  };
 }
 
 /**
@@ -90,22 +175,40 @@ export async function calculateIdleEarnings(guild) {
   // Get guild's upgrades
   const upgrades = await getGuildUpgrades(guild.id);
   const bonuses = calculateUpgradeBonuses(upgrades);
-  const rates = calculateRates(guild, bonuses);
+
+  // Get prestige upgrades and calculate prestige bonuses
+  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+  const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
+
+  const rates = calculateRates(guild, bonuses, prestigeBonuses);
 
   // Calculate time since last collection
   const lastCollected = new Date(guild.last_collected_at);
   const now = new Date();
   const hoursElapsed = (now - lastCollected) / (1000 * 60 * 60);
 
+  // Calculate max idle hours (base + prestige bonus)
+  const maxIdleHours = GAME.MAX_IDLE_HOURS + prestigeBonuses.maxIdleHoursBonus;
+
   // Cap at maximum idle hours
-  const cappedHours = Math.min(hoursElapsed, GAME.MAX_IDLE_HOURS);
+  const cappedHours = Math.min(hoursElapsed, maxIdleHours);
 
   // Calculate earnings
-  const goldEarned = Math.floor(rates.goldPerHour * cappedHours);
+  let goldEarned = Math.floor(rates.goldPerHour * cappedHours);
   const xpEarned = Math.floor(rates.xpPerHour * cappedHours);
 
+  // Check for double gold (Lucky Coin)
+  let doubledGold = false;
+  if (prestigeBonuses.doubleGoldChance > 0 && Math.random() < prestigeBonuses.doubleGoldChance) {
+    goldEarned *= 2;
+    doubledGold = true;
+  }
+
   // Calculate adventurer growth (if they have the upgrade)
-  const adventurersGained = Math.floor(bonuses.adventurerPerHour * cappedHours);
+  // Apply prestige recruitment multiplier
+  let adventurersGained = Math.floor(
+    bonuses.adventurerPerHour * cappedHours * prestigeBonuses.recruitmentMultiplier
+  );
 
   return {
     goldEarned,
@@ -114,7 +217,10 @@ export async function calculateIdleEarnings(guild) {
     hoursElapsed: cappedHours,
     rates,
     bonuses,
-    wasCapped: hoursElapsed > GAME.MAX_IDLE_HOURS,
+    prestigeBonuses,
+    wasCapped: hoursElapsed > maxIdleHours,
+    maxIdleHours,
+    doubledGold,
   };
 }
 
@@ -126,4 +232,15 @@ export async function calculateIdleEarnings(guild) {
  */
 export function getEffectiveCapacity(guild, bonuses) {
   return guild.adventurer_capacity + bonuses.adventurerCapacityBonus;
+}
+
+/**
+ * Format prestige bonuses as a percentage string
+ * @param {number} multiplier - The multiplier (e.g., 1.276)
+ * @returns {string} Formatted percentage (e.g., "+27.6%")
+ */
+export function formatPrestigeBonus(multiplier) {
+  const percentage = (multiplier - 1) * 100;
+  if (percentage === 0) return '+0%';
+  return `+${percentage.toFixed(1)}%`;
 }

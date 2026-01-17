@@ -32,23 +32,44 @@ function getRankBonusText(level, currentRank) {
 }
 
 /**
+ * Format prestige stars for display
+ * @param {number} prestigeLevel - The prestige level
+ * @returns {string} Star display
+ */
+export function formatPrestigeStars(prestigeLevel) {
+  if (prestigeLevel === 0) return '';
+  const stars = Math.min(prestigeLevel, 10);
+  return '⭐'.repeat(stars) + (prestigeLevel > 10 ? ` +${prestigeLevel - 10}` : '');
+}
+
+/**
  * Create a guild profile embed
  * @param {Object} guild - Guild data from database
  * @param {Object} stats - Calculated stats (goldPerHour, xpPerHour)
  * @param {Object} pendingEarnings - Pending earnings from calculateIdleEarnings()
+ * @param {Object} prestigeBonuses - Prestige bonus multipliers (optional)
  * @returns {EmbedBuilder}
  */
-export function createGuildEmbed(guild, stats = {}, pendingEarnings = null) {
+export function createGuildEmbed(guild, stats = {}, pendingEarnings = null, prestigeBonuses = null) {
   const rank = getRankForLevel(guild.level);
   const nextLevelXp = getTotalXpForLevel(guild.level + 1);
   const currentLevelXp = getTotalXpForLevel(guild.level);
   const xpProgress = guild.xp - currentLevelXp;
   const xpNeeded = nextLevelXp - currentLevelXp;
   
+  // Build description with prestige info
+  let description = `*${rank.name} Rank Adventurer's Guild*`;
+  if (guild.prestige_level > 0) {
+    description += `\n${formatPrestigeStars(guild.prestige_level)} **Prestige ${guild.prestige_level}**`;
+    if (guild.prestige_points > 0) {
+      description += ` | ${guild.prestige_points} pts`;
+    }
+  }
+  
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${rank.emoji} ${guild.name}`)
-    .setDescription(`*${rank.name} Rank Adventurer's Guild*`)
+    .setDescription(description)
     .addFields(
       {
         name: 'Level',
@@ -203,7 +224,7 @@ export function createUpgradesEmbed(upgrades, category, playerGold) {
     }
   }
   
-  embed.setFooter({ text: 'Categories: recruitment, equipment, facilities, missions' });
+  embed.setFooter({ text: 'Categories: recruitment, equipment, facilities, missions, magic, trade' });
   
   return embed;
 }

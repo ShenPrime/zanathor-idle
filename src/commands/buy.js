@@ -25,10 +25,12 @@ import { formatNumber } from '../utils/format.js';
 
 const CATEGORIES = [
   { id: 'all', label: 'All', emoji: null },
-  { id: 'recruitment', label: 'Recruitment', emoji: null },
-  { id: 'equipment', label: 'Equipment', emoji: null },
-  { id: 'facilities', label: 'Facilities', emoji: null },
-  { id: 'missions', label: 'Missions', emoji: null },
+  { id: 'recruitment', label: 'Recruit', emoji: '👥' },
+  { id: 'equipment', label: 'Equip', emoji: '⚔️' },
+  { id: 'facilities', label: 'Facility', emoji: '🏛️' },
+  { id: 'missions', label: 'Mission', emoji: '📜' },
+  { id: 'magic', label: 'Magic', emoji: '🔮' },
+  { id: 'trade', label: 'Trade', emoji: '💹' },
 ];
 
 export const data = new SlashCommandBuilder()
@@ -44,7 +46,9 @@ export const data = new SlashCommandBuilder()
         { name: 'Recruitment - Adventurer capacity', value: 'recruitment' },
         { name: 'Equipment - Gold generation', value: 'equipment' },
         { name: 'Facilities - XP and bonuses', value: 'facilities' },
-        { name: 'Missions - Passive income', value: 'missions' }
+        { name: 'Missions - Passive income', value: 'missions' },
+        { name: 'Magic - XP and special bonuses', value: 'magic' },
+        { name: 'Trade - Gold income', value: 'trade' }
       )
   );
 

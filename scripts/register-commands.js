@@ -15,6 +15,7 @@ import * as nerdstatsCommand from '../src/commands/nerdstats.js';
 import * as battleCommand from '../src/commands/battle.js';
 import * as battlesCommand from '../src/commands/battles.js';
 import * as watchCommand from '../src/commands/watch.js';
+import * as prestigeCommand from '../src/commands/prestige.js';
 
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
@@ -34,6 +35,7 @@ const commands = [
   battleCommand,
   battlesCommand,
   watchCommand,
+  prestigeCommand,
 ];
 
 const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);

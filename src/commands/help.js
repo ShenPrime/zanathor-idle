@@ -44,6 +44,14 @@ export async function execute(interaction) {
         inline: false,
       },
       {
+        name: 'Prestige System',
+        value:
+          '`/prestige status` - View your prestige level and bonuses\n' +
+          '`/prestige shop` - Buy permanent upgrades with prestige points\n\n' +
+          '*Reach level 50+ to prestige and gain powerful permanent bonuses!*',
+        inline: false,
+      },
+      {
         name: 'How It Works',
         value:
           'Your adventurers automatically generate **gold** and **XP** over time.\n\n' +
@@ -60,10 +68,12 @@ export async function execute(interaction) {
       {
         name: 'Upgrade Categories',
         value:
-          '**Recruitment** - Increase adventurer capacity\n' +
+          '**Recruitment** - Increase adventurer capacity and growth\n' +
           '**Equipment** - Boost gold generation per adventurer\n' +
           '**Facilities** - Improve XP gain and overall bonuses\n' +
-          '**Missions** - Unlock higher-tier passive income',
+          '**Missions** - Unlock higher-tier passive income\n' +
+          '**Magic** - XP boosts and special bonuses\n' +
+          '**Trade** - Additional gold income and multipliers',
         inline: false,
       }
     )
