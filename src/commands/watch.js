@@ -37,9 +37,24 @@ function formatElapsedTime(ms) {
 }
 
 /**
+ * Format rate per second with decimals
+ */
+function formatRate(perHour) {
+  const perSecond = perHour / 3600;
+  if (perSecond >= 1) {
+    return `${perSecond.toFixed(1)}/s`;
+  } else {
+    return `${perSecond.toFixed(2)}/s`;
+  }
+}
+
+/**
  * Build the watch embed
  */
-function buildWatchEmbed(guildName, uncollectedGold, uncollectedXp, deltaGold, deltaXp, totalGold, totalXp, goldPerMin, xpPerMin, adventurerCount, elapsedMs, collectionDetected) {
+function buildWatchEmbed(guildName, bankedGold, bankedXp, uncollectedGold, uncollectedXp, deltaGold, deltaXp, goldPerHour, xpPerHour, adventurerCount, elapsedMs, collectionDetected) {
+  const totalGold = bankedGold + uncollectedGold;
+  const totalXp = bankedXp + uncollectedXp;
+  
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`LIVE EARNINGS - ${guildName}`)
@@ -47,27 +62,29 @@ function buildWatchEmbed(guildName, uncollectedGold, uncollectedXp, deltaGold, d
     .addFields(
       {
         name: 'Gold',
-        value: `${formatNumber(uncollectedGold)} (+${formatNumber(deltaGold)}) Total: ${formatNumber(totalGold)}`,
+        value: [
+          `Banked: **${formatNumber(bankedGold)}**`,
+          `Uncollected: **${formatNumber(uncollectedGold)}** (+${formatNumber(deltaGold)})`,
+          `Total: **${formatNumber(totalGold)}**`,
+        ].join('\n'),
         inline: true,
       },
       {
         name: 'XP',
-        value: `${formatNumber(uncollectedXp)} (+${formatNumber(deltaXp)}) Total: ${formatNumber(totalXp)}`,
-        inline: true,
-      },
-      {
-        name: '\u200b',
-        value: '\u200b',
+        value: [
+          `Banked: **${formatNumber(bankedXp)}**`,
+          `Uncollected: **${formatNumber(uncollectedXp)}** (+${formatNumber(deltaXp)})`,
+          `Total: **${formatNumber(totalXp)}**`,
+        ].join('\n'),
         inline: true,
       },
       {
         name: 'Rate',
-        value: `~${formatNumber(goldPerMin)} gold/min | ~${formatNumber(xpPerMin)} XP/min`,
-        inline: true,
-      },
-      {
-        name: 'Adventurers',
-        value: `${formatNumber(adventurerCount)} working`,
+        value: [
+          `Gold: **${formatRate(goldPerHour)}**`,
+          `XP: **${formatRate(xpPerHour)}**`,
+          `Adventurers: **${formatNumber(adventurerCount)}**`,
+        ].join('\n'),
         inline: true,
       }
     )
@@ -134,24 +151,17 @@ export async function execute(interaction) {
     bankedXp: Number(guild.xp),
   };
   
-  // Calculate rates per minute
-  const goldPerMin = Math.round(initialEarnings.rates.goldPerHour / 60);
-  const xpPerMin = Math.round(initialEarnings.rates.xpPerHour / 60);
-  
   // Build initial embed
-  const totalGold = baseline.bankedGold + baseline.uncollectedGold;
-  const totalXp = baseline.bankedXp + baseline.uncollectedXp;
-  
   const embed = buildWatchEmbed(
     guild.name,
+    baseline.bankedGold,
+    baseline.bankedXp,
     baseline.uncollectedGold,
     baseline.uncollectedXp,
     0, // delta gold
     0, // delta xp
-    totalGold,
-    totalXp,
-    goldPerMin,
-    xpPerMin,
+    initialEarnings.rates.goldPerHour,
+    initialEarnings.rates.xpPerHour,
     guild.adventurer_count,
     0, // elapsed time
     false // collection detected
@@ -191,19 +201,17 @@ export async function execute(interaction) {
         const finalUncollectedXp = finalEarnings.xpEarned;
         const finalDeltaGold = Math.max(0, finalUncollectedGold - baseline.uncollectedGold);
         const finalDeltaXp = Math.max(0, finalUncollectedXp - baseline.uncollectedXp);
-        const finalTotalGold = Number(finalGuild.gold) + finalUncollectedGold;
-        const finalTotalXp = Number(finalGuild.xp) + finalUncollectedXp;
         
         const finalEmbed = buildWatchEmbed(
           finalGuild.name,
+          Number(finalGuild.gold),
+          Number(finalGuild.xp),
           finalUncollectedGold,
           finalUncollectedXp,
           finalDeltaGold,
           finalDeltaXp,
-          finalTotalGold,
-          finalTotalXp,
-          goldPerMin,
-          xpPerMin,
+          finalEarnings.rates.goldPerHour,
+          finalEarnings.rates.xpPerHour,
           finalGuild.adventurer_count,
           elapsedMs,
           false
@@ -255,24 +263,18 @@ export async function execute(interaction) {
       // Calculate deltas
       const deltaGold = Math.max(0, currentUncollectedGold - baseline.uncollectedGold);
       const deltaXp = Math.max(0, currentUncollectedXp - baseline.uncollectedXp);
-      const totalGold = currentBankedGold + currentUncollectedGold;
-      const totalXp = currentBankedXp + currentUncollectedXp;
-      
-      // Update rates (in case adventurer count changed)
-      const currentGoldPerMin = Math.round(currentEarnings.rates.goldPerHour / 60);
-      const currentXpPerMin = Math.round(currentEarnings.rates.xpPerHour / 60);
       
       // Build updated embed
       const updatedEmbed = buildWatchEmbed(
         currentGuild.name,
+        currentBankedGold,
+        currentBankedXp,
         currentUncollectedGold,
         currentUncollectedXp,
         deltaGold,
         deltaXp,
-        totalGold,
-        totalXp,
-        currentGoldPerMin,
-        currentXpPerMin,
+        currentEarnings.rates.goldPerHour,
+        currentEarnings.rates.xpPerHour,
         currentGuild.adventurer_count,
         elapsedMs,
         collectionDetected
@@ -402,22 +404,17 @@ export async function handleStopButton(interaction) {
   const finalUncollectedXp = finalEarnings.xpEarned;
   const deltaGold = Math.max(0, finalUncollectedGold - watcher.baseline.uncollectedGold);
   const deltaXp = Math.max(0, finalUncollectedXp - watcher.baseline.uncollectedXp);
-  const totalGold = Number(guild.gold) + finalUncollectedGold;
-  const totalXp = Number(guild.xp) + finalUncollectedXp;
-  
-  const goldPerMin = Math.round(finalEarnings.rates.goldPerHour / 60);
-  const xpPerMin = Math.round(finalEarnings.rates.xpPerHour / 60);
   
   const finalEmbed = buildWatchEmbed(
     guild.name,
+    Number(guild.gold),
+    Number(guild.xp),
     finalUncollectedGold,
     finalUncollectedXp,
     deltaGold,
     deltaXp,
-    totalGold,
-    totalXp,
-    goldPerMin,
-    xpPerMin,
+    finalEarnings.rates.goldPerHour,
+    finalEarnings.rates.xpPerHour,
     guild.adventurer_count,
     elapsedMs,
     false
