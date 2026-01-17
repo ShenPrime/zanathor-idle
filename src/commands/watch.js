@@ -15,7 +15,15 @@ const activeWatchers = new Map();
 
 export const data = new SlashCommandBuilder()
   .setName('earnings')
-  .setDescription('Watch your gold and XP earnings update in real-time');
+  .setDescription('Watch your gold and XP earnings update in real-time')
+  .addIntegerOption(option =>
+    option
+      .setName('duration')
+      .setDescription('How long to watch in minutes (default: 60, max: 60)')
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(MAX_DURATION_MIN)
+  );
 
 /**
  * Format elapsed time as "Xm Ys" or "Ys"
@@ -152,12 +160,12 @@ export async function execute(interaction) {
   const row = buildStopButton(userId);
   
   // Send initial reply
-  const reply = await interaction.reply({
+  await interaction.reply({
     embeds: [embed],
     components: [row],
     flags: MessageFlags.Ephemeral,
-    fetchReply: true,
   });
+  const reply = await interaction.fetchReply();
   
   const startTime = Date.now();
   let lastMessageTime = startTime;
@@ -203,13 +211,17 @@ export async function execute(interaction) {
         finalEmbed.setTitle(`WATCH ENDED - ${finalGuild.name}`);
         finalEmbed.setColor(COLORS.WARNING);
         
-        try {
-          await currentMessage.edit({
-            embeds: [finalEmbed],
-            components: [], // Remove button
-          });
-        } catch (e) {
-          // Message might be deleted, ignore
+        // Get the watcher to access the interaction
+        const watcher = activeWatchers.get(userId);
+        if (watcher) {
+          try {
+            await watcher.interaction.editReply({
+              embeds: [finalEmbed],
+              components: [], // Remove button
+            });
+          } catch (e) {
+            // Interaction might be expired, ignore
+          }
         }
         return;
       }
@@ -273,49 +285,58 @@ export async function execute(interaction) {
       
       const updatedRow = buildStopButton(userId);
       
+      // Get the watcher to access the interaction
+      const watcher = activeWatchers.get(userId);
+      if (!watcher) return;
+      
       // Check if we need to refresh the message (14 minutes since last message)
       if (now - lastMessageTime >= MESSAGE_REFRESH_MS) {
-        // Delete old message
+        // Send new followUp (old message will just stay there, can't delete ephemeral)
         try {
-          await currentMessage.delete();
-        } catch (e) {
-          // Message might already be deleted, ignore
-        }
-        
-        // Get the watcher to access the interaction
-        const watcher = activeWatchers.get(userId);
-        if (!watcher) return;
-        
-        // Send new followUp
-        try {
-          const newMessage = await watcher.interaction.followUp({
+          await watcher.interaction.followUp({
             embeds: [updatedEmbed],
             components: [updatedRow],
             flags: MessageFlags.Ephemeral,
-            fetchReply: true,
           });
           
-          currentMessage = newMessage;
-          watcher.currentMessage = newMessage;
           lastMessageTime = now;
           watcher.lastMessageTime = now;
+          watcher.useFollowUp = true; // Mark that we're now using followUp
         } catch (e) {
           console.log('Failed to send watch followUp:', e.message);
           stopWatcher(userId);
           return;
         }
       } else {
-        // Just edit the current message
+        // Edit the reply using interaction.editReply for ephemeral messages
         try {
-          await currentMessage.edit({
+          await watcher.interaction.editReply({
             embeds: [updatedEmbed],
             components: [updatedRow],
           });
         } catch (e) {
-          // Message might be deleted or interaction expired
-          console.log('Failed to edit watch message:', e.message);
-          stopWatcher(userId);
-          return;
+          // Interaction might have expired, try followUp instead
+          if (!watcher.useFollowUp) {
+            try {
+              await watcher.interaction.followUp({
+                embeds: [updatedEmbed],
+                components: [updatedRow],
+                flags: MessageFlags.Ephemeral,
+              });
+              watcher.useFollowUp = true;
+              lastMessageTime = now;
+              watcher.lastMessageTime = now;
+            } catch (followUpError) {
+              console.log('Failed to edit or followUp watch message:', followUpError.message);
+              stopWatcher(userId);
+              return;
+            }
+          } else {
+            // Already using followUp and it failed, stop the watcher
+            console.log('Watch interaction expired:', e.message);
+            stopWatcher(userId);
+            return;
+          }
         }
       }
     } catch (error) {

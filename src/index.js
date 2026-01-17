@@ -75,9 +75,6 @@ async function deployCommands() {
 
   try {
     const commandData = commands.map((cmd) => cmd.data.toJSON());
-    
-    // Log all command names being registered
-    console.log('Commands to register:', commandData.map(c => c.name).join(', '));
 
     // Use guild commands for instant updates during development
     // Set DEV_GUILD_ID in .env for dev, leave it unset for production (global commands)
@@ -88,7 +85,6 @@ async function deployCommands() {
         { body: commandData }
       );
       console.log(`Successfully registered ${result.length} commands to dev guild!`);
-      console.log('Registered commands:', result.map(c => c.name).join(', '));
     } else {
       console.log(`Registering ${commands.length} global commands (may take up to 1 hour)...`);
       await rest.put(
@@ -492,8 +488,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`\nLogged in as ${readyClient.user.tag}!`);
   console.log(`Bot is in ${readyClient.guilds.cache.size} server(s)`);
-  console.log('Guild IDs:', readyClient.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
-  console.log('DEV_GUILD_ID from env:', process.env.DEV_GUILD_ID);
   
   // Start the reminder checker
   startReminderChecker(client);
