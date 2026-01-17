@@ -1,4 +1,4 @@
-import { pool } from './pool.js';
+import { query, getClient } from './connection.js';
 import { PRESTIGE } from '../config.js';
 
 /**
@@ -6,7 +6,7 @@ import { PRESTIGE } from '../config.js';
  * @returns {Promise<Array>} All prestige upgrades
  */
 export async function getAllPrestigeUpgrades() {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     'SELECT * FROM prestige_upgrades ORDER BY id'
   );
   return rows;
@@ -18,7 +18,7 @@ export async function getAllPrestigeUpgrades() {
  * @returns {Promise<Object|null>} The upgrade or null
  */
 export async function getPrestigeUpgradeById(upgradeId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     'SELECT * FROM prestige_upgrades WHERE id = $1',
     [upgradeId]
   );
@@ -31,7 +31,7 @@ export async function getPrestigeUpgradeById(upgradeId) {
  * @returns {Promise<Array>} Guild's prestige upgrades with details
  */
 export async function getGuildPrestigeUpgrades(guildId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT pu.*, gpu.level as current_level
      FROM prestige_upgrades pu
      LEFT JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id AND gpu.guild_id = $1
@@ -47,7 +47,7 @@ export async function getGuildPrestigeUpgrades(guildId) {
  * @returns {Promise<Array>} Owned prestige upgrades
  */
 export async function getOwnedPrestigeUpgrades(guildId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT pu.*, gpu.level
      FROM guild_prestige_upgrades gpu
      JOIN prestige_upgrades pu ON gpu.prestige_upgrade_id = pu.id
@@ -64,7 +64,7 @@ export async function getOwnedPrestigeUpgrades(guildId) {
  * @returns {Promise<number>} Current level (0 if not purchased)
  */
 export async function getGuildPrestigeUpgradeLevel(guildId, upgradeId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     'SELECT level FROM guild_prestige_upgrades WHERE guild_id = $1 AND prestige_upgrade_id = $2',
     [guildId, upgradeId]
   );
@@ -78,7 +78,7 @@ export async function getGuildPrestigeUpgradeLevel(guildId, upgradeId) {
  * @returns {Promise<Object>} Result with success status and new level
  */
 export async function purchasePrestigeUpgrade(guildId, upgradeId) {
-  const client = await pool.connect();
+  const client = await getClient();
   
   try {
     await client.query('BEGIN');
@@ -216,7 +216,7 @@ export function calculatePrestigeRewards(guild) {
  * @returns {Promise<Object>} Result with new stats
  */
 export async function executePrestige(guildId, prestigeUpgrades = []) {
-  const client = await pool.connect();
+  const client = await getClient();
   
   try {
     await client.query('BEGIN');
@@ -276,13 +276,13 @@ export async function executePrestige(guildId, prestigeUpgrades = []) {
       [guildId]
     );
     
-    await client.query('COMMIT');
-    
-    // Get updated guild
+    // Get updated guild before committing (still in transaction)
     const { rows: [updatedGuild] } = await client.query(
       'SELECT * FROM guilds WHERE id = $1',
       [guildId]
     );
+    
+    await client.query('COMMIT');
     
     return {
       success: true,
@@ -377,7 +377,7 @@ export function getPrestigeUpgradeEffect(prestigeUpgrades, effectType) {
  * @returns {Promise<boolean>} New auto-prestige status
  */
 export async function toggleAutoPrestige(guildId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `UPDATE guilds 
      SET auto_prestige_enabled = NOT auto_prestige_enabled 
      WHERE id = $1 
