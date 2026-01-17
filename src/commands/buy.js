@@ -87,17 +87,20 @@ async function buildBuyMenu(guild, category = 'all') {
     });
   }
   
-  // Build category buttons
-  const categoryRow = new ActionRowBuilder().addComponents(
-    CATEGORIES.map(cat => 
-      new ButtonBuilder()
-        .setCustomId(`buy_category:${cat.id}`)
-        .setLabel(cat.label)
-        .setStyle(cat.id === category ? ButtonStyle.Primary : ButtonStyle.Secondary)
-    )
+  // Build category buttons (split into rows of 5 max)
+  const categoryButtons = CATEGORIES.map(cat => 
+    new ButtonBuilder()
+      .setCustomId(`buy_category:${cat.id}`)
+      .setLabel(cat.label)
+      .setStyle(cat.id === category ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
   
-  const components = [categoryRow];
+  // Discord allows max 5 buttons per row
+  const components = [];
+  for (let i = 0; i < categoryButtons.length; i += 5) {
+    const rowButtons = categoryButtons.slice(i, i + 5);
+    components.push(new ActionRowBuilder().addComponents(rowButtons));
+  }
   
   // Build select menu if there are upgrades
   if (upgrades.length > 0) {
@@ -146,7 +149,7 @@ export async function execute(interaction) {
   await interaction.reply({
     embeds: [embed],
     components,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
