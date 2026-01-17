@@ -15,15 +15,7 @@ const activeWatchers = new Map();
 
 export const data = new SlashCommandBuilder()
   .setName('earnings')
-  .setDescription('Watch your gold and XP earnings update in real-time')
-  .addIntegerOption(option =>
-    option
-      .setName('duration')
-      .setDescription('How long to watch in minutes (default: 60, max: 60)')
-      .setRequired(false)
-      .setMinValue(1)
-      .setMaxValue(MAX_DURATION_MIN)
-  );
+  .setDescription('Watch your gold and XP earnings update in real-time');
 
 /**
  * Format elapsed time as "Xm Ys" or "Ys"
