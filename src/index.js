@@ -24,6 +24,7 @@ import * as notifyCommand from './commands/notify.js';
 import * as nerdstatsCommand from './commands/nerdstats.js';
 import * as battleCommand from './commands/battle.js';
 import * as battlesCommand from './commands/battles.js';
+import * as watchCommand from './commands/watch.js';
 
 // Import jobs
 import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
@@ -60,6 +61,7 @@ const commands = [
   nerdstatsCommand,
   battleCommand,
   battlesCommand,
+  watchCommand,
 ];
 
 // Register commands in collection
@@ -316,6 +318,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: 'There was an error declining the challenge.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+    
+    // Watch stop button
+    if (interaction.customId.startsWith('watch_stop:')) {
+      try {
+        await watchCommand.handleStopButton(interaction);
+      } catch (error) {
+        console.error('Error handling watch stop button:', error);
+        
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'There was an error stopping the watch.',
             flags: MessageFlags.Ephemeral,
           });
         }
