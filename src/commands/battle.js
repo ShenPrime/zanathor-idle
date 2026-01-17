@@ -140,8 +140,8 @@ export async function execute(interaction) {
   }
   
   // Calculate power and determine battle type
-  const attackerPower = calculatePower(attackerGuild);
-  const defenderPower = calculatePower(defenderGuild);
+  const attackerPower = await calculatePower(attackerGuild);
+  const defenderPower = await calculatePower(defenderGuild);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -244,11 +244,14 @@ async function executeBattle(interaction, attackerGuild, defenderGuild, defender
   const strongerWon = (attackerIsStronger && attackerWon) || (!attackerIsStronger && !attackerWon);
   
   // Calculate rewards with new system
+  // attackerLost = true means the attacker lost (defender won) - attacker always loses full bet
+  const attackerLost = !attackerWon;
   const { goldTransfer, xpBonus, wasCapped } = calculateBattleRewards({
     betAmount,
     loserGuild,
     strongerWon,
     isCapped: battleType.isCapped,
+    attackerLost,
   });
   
   // Apply battle results
@@ -462,8 +465,8 @@ export async function handleBattleAccept(interaction) {
   }
   
   // Calculate power and battle type
-  const attackerPower = calculatePower(attackerGuild);
-  const defenderPower = calculatePower(defenderGuild);
+  const attackerPower = await calculatePower(attackerGuild);
+  const defenderPower = await calculatePower(defenderGuild);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -749,8 +752,8 @@ async function executeCounterAttack(interaction, betAmount, originalAttackerId, 
   }
   
   // Calculate power and battle type
-  const attackerPower = calculatePower(counterAttackerGuild);
-  const defenderPower = calculatePower(defenderGuild);
+  const attackerPower = await calculatePower(counterAttackerGuild);
+  const defenderPower = await calculatePower(defenderGuild);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -771,11 +774,14 @@ async function executeCounterAttack(interaction, betAmount, originalAttackerId, 
   const strongerWon = (attackerIsStronger && attackerWon) || (!attackerIsStronger && !attackerWon);
   
   // Calculate rewards with new system
+  // attackerLost = true means the counter-attacker lost - they always lose full bet
+  const attackerLost = !attackerWon;
   const { goldTransfer, xpBonus, wasCapped } = calculateBattleRewards({
     betAmount,
     loserGuild,
     strongerWon,
     isCapped: battleType.isCapped,
+    attackerLost,
   });
   
   // Apply battle results
@@ -947,8 +953,8 @@ export async function handleFreeRevenge(interaction) {
   }
   
   // Calculate power and win chance
-  const attackerPower = calculatePower(counterAttackerGuild);
-  const defenderPower = calculatePower(defenderGuild);
+  const attackerPower = await calculatePower(counterAttackerGuild);
+  const defenderPower = await calculatePower(defenderGuild);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const winChance = calculateWinChance(attackerPower, defenderPower);
   

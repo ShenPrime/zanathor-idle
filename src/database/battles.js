@@ -1,5 +1,8 @@
 import { query } from './connection.js';
 import { getRankForLevel } from '../config.js';
+import { getGuildUpgrades } from './upgrades.js';
+import { getOwnedPrestigeUpgrades } from './prestige.js';
+import { calculateUpgradeBonuses, calculateRates, calculatePrestigeBonuses } from '../game/idle.js';
 
 // TODO: Re-enable for production
 // const GLOBAL_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
@@ -25,17 +28,28 @@ const FREE_REVENGE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Calculate guild power for battle
- * Power = adventurers + (gold / 1000) + (rankBonus * 10)
+ * Power = adventurers + (goldPerHour / 500) + (xp / 5000)
+ * Uses actual production rates (with upgrades/prestige) instead of held gold
  * @param {Object} guild - Guild object
- * @returns {number} Power value
+ * @returns {Promise<number>} Power value
  */
-export function calculatePower(guild) {
-  const rank = getRankForLevel(guild.level);
-  const adventurerPower = guild.adventurer_count;
-  const goldPower = Number(guild.gold) / 1000;
-  const rankPower = rank.multiplier * 10;
+export async function calculatePower(guild) {
+  // Get guild's upgrades and calculate bonuses
+  const upgrades = await getGuildUpgrades(guild.id);
+  const bonuses = calculateUpgradeBonuses(upgrades);
   
-  return adventurerPower + goldPower + rankPower;
+  // Get prestige upgrades and calculate prestige bonuses
+  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+  const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
+  
+  // Calculate rates with all bonuses applied
+  const rates = calculateRates(guild, bonuses, prestigeBonuses);
+  
+  const adventurerPower = guild.adventurer_count;
+  const goldRatePower = rates.goldPerHour / 500;
+  const xpPower = Number(guild.xp) / 5000;
+  
+  return adventurerPower + goldRatePower + xpPower;
 }
 
 /**
@@ -100,15 +114,17 @@ export function getBattleType(powerRatio) {
  * Calculate battle rewards based on new system:
  * - Winner takes bet from loser (or capped amount if power disparity)
  * - Winner gets flat 1-5% XP bonus
+ * - IMPORTANT: Attacker ALWAYS loses their full bet if they lose, no caps
  * 
  * @param {Object} params - Battle parameters
  * @param {number} params.betAmount - The bet amount
  * @param {Object} params.loserGuild - Loser's guild
  * @param {boolean} params.strongerWon - Whether the stronger player won
  * @param {boolean} params.isCapped - Whether power disparity cap applies
+ * @param {boolean} params.attackerLost - Whether the attacker was the one who lost
  * @returns {{ goldTransfer: number, xpBonus: number, wasCapped: boolean }}
  */
-export function calculateBattleRewards({ betAmount, loserGuild, strongerWon, isCapped }) {
+export function calculateBattleRewards({ betAmount, loserGuild, strongerWon, isCapped, attackerLost }) {
   // XP bonus for winner: flat 1-5%
   const xpPercent = 1 + Math.random() * 4; // 1-5%
   const xpBonus = Math.floor(Number(loserGuild.xp) * (xpPercent / 100));
@@ -117,8 +133,13 @@ export function calculateBattleRewards({ betAmount, loserGuild, strongerWon, isC
   let goldTransfer = betAmount;
   let wasCapped = false;
   
-  // If stronger player won AND power disparity is >= 3x, cap winnings to 1-5% of loser's gold
-  if (strongerWon && isCapped) {
+  // Attacker ALWAYS loses their full bet if they lose - no caps apply
+  // Caps only protect defenders (the weaker party being attacked)
+  if (attackerLost) {
+    // Attacker loses: full bet amount, no cap protection
+    goldTransfer = betAmount;
+  } else if (strongerWon && isCapped) {
+    // Defender loses to stronger attacker: cap winnings to 1-5% of loser's gold
     const cappedPercent = 1 + Math.random() * 4; // 1-5%
     const cappedAmount = Math.floor(Number(loserGuild.gold) * (cappedPercent / 100));
     
