@@ -75,16 +75,20 @@ async function deployCommands() {
 
   try {
     const commandData = commands.map((cmd) => cmd.data.toJSON());
+    
+    // Log all command names being registered
+    console.log('Commands to register:', commandData.map(c => c.name).join(', '));
 
     // Use guild commands for instant updates during development
     // Set DEV_GUILD_ID in .env for dev, leave it unset for production (global commands)
     if (DEV_GUILD_ID) {
       console.log(`Registering ${commands.length} guild commands (instant updates)...`);
-      await rest.put(
+      const result = await rest.put(
         Routes.applicationGuildCommands(CLIENT_ID, DEV_GUILD_ID),
         { body: commandData }
       );
-      console.log(`Successfully registered ${commands.length} commands to dev guild!`);
+      console.log(`Successfully registered ${result.length} commands to dev guild!`);
+      console.log('Registered commands:', result.map(c => c.name).join(', '));
     } else {
       console.log(`Registering ${commands.length} global commands (may take up to 1 hour)...`);
       await rest.put(
