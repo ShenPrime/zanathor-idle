@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } from 'discord.js';
-import { getGuildByDiscordId } from '../database/guilds.js';
-import { calculateIdleEarnings } from '../game/idle.js';
+import { getGuildByDiscordId, getGuildWithData } from '../database/guilds.js';
+import { calculateIdleEarnings, calculateIdleEarningsWithData } from '../game/idle.js';
 import { createErrorEmbed, COLORS } from '../utils/embeds.js';
 import { formatNumber } from '../utils/format.js';
 
@@ -131,8 +131,8 @@ export async function execute(interaction) {
     stopWatcher(userId);
   }
   
-  // Get guild data
-  const guild = await getGuildByDiscordId(userId);
+  // Get guild data with upgrades (combined query)
+  const { guild, upgrades, prestigeUpgrades } = await getGuildWithData(userId);
   if (!guild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
@@ -140,8 +140,8 @@ export async function execute(interaction) {
     });
   }
   
-  // Calculate initial idle earnings
-  const initialEarnings = await calculateIdleEarnings(guild);
+  // Calculate initial idle earnings using pre-loaded data
+  const initialEarnings = calculateIdleEarningsWithData(guild, upgrades, prestigeUpgrades);
   
   // Store baseline values
   const baseline = {
@@ -234,14 +234,15 @@ export async function execute(interaction) {
         return;
       }
       
-      // Get current guild data
-      const currentGuild = await getGuildByDiscordId(userId);
+      // Get current guild data with upgrades (combined query for better performance)
+      const currentData = await getGuildWithData(userId);
+      const currentGuild = currentData.guild;
       if (!currentGuild) {
         stopWatcher(userId);
         return;
       }
       
-      const currentEarnings = await calculateIdleEarnings(currentGuild);
+      const currentEarnings = calculateIdleEarningsWithData(currentGuild, currentData.upgrades, currentData.prestigeUpgrades);
       const currentUncollectedGold = currentEarnings.goldEarned;
       const currentUncollectedXp = currentEarnings.xpEarned;
       const currentBankedGold = Number(currentGuild.gold);
@@ -388,8 +389,8 @@ export async function handleStopButton(interaction) {
   // Stop the watcher
   stopWatcher(targetUserId);
   
-  // Get final guild data
-  const guild = await getGuildByDiscordId(targetUserId);
+  // Get final guild data with upgrades (combined query)
+  const { guild, upgrades, prestigeUpgrades } = await getGuildWithData(targetUserId);
   if (!guild) {
     return interaction.update({
       embeds: [createErrorEmbed('Guild not found.')],
@@ -397,7 +398,7 @@ export async function handleStopButton(interaction) {
     });
   }
   
-  const finalEarnings = await calculateIdleEarnings(guild);
+  const finalEarnings = calculateIdleEarningsWithData(guild, upgrades, prestigeUpgrades);
   const elapsedMs = Date.now() - watcher.startTime;
   
   const finalUncollectedGold = finalEarnings.goldEarned;

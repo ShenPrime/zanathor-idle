@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
-import { getGuildByDiscordId } from '../database/guilds.js';
+import { getGuildByDiscordId, getGuildWithData } from '../database/guilds.js';
 import { getNotificationSettings } from '../database/notifications.js';
 import {
   calculatePower,
@@ -63,8 +63,8 @@ export async function execute(interaction) {
     });
   }
   
-  // Get attacker's guild
-  const attackerGuild = await getGuildByDiscordId(interaction.user.id);
+  // Get attacker's guild with upgrades and prestige data (1 query instead of 3)
+  const { guild: attackerGuild, upgrades: attackerUpgrades, prestigeUpgrades: attackerPrestigeUpgrades } = await getGuildWithData(interaction.user.id);
   if (!attackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
@@ -98,11 +98,14 @@ export async function execute(interaction) {
     });
   }
   
-  // Get defender guild
+  // Get defender guild with upgrades and prestige data
   let defenderGuild;
+  let defenderUpgrades;
+  let defenderPrestigeUpgrades;
   let defenderDiscordId;
   
   if (randomBattle) {
+    // For random battles, we need to get the guild first, then fetch its data
     defenderGuild = await getRandomTarget(attackerGuild.id);
     if (!defenderGuild) {
       return interaction.reply({
@@ -111,6 +114,11 @@ export async function execute(interaction) {
       });
     }
     defenderDiscordId = defenderGuild.discord_id;
+    // Fetch the full data for the random target
+    const defenderData = await getGuildWithData(defenderDiscordId);
+    defenderGuild = defenderData.guild;
+    defenderUpgrades = defenderData.upgrades;
+    defenderPrestigeUpgrades = defenderData.prestigeUpgrades;
   } else {
     // Can't battle yourself
     if (targetUser.id === interaction.user.id) {
@@ -120,7 +128,11 @@ export async function execute(interaction) {
       });
     }
     
-    defenderGuild = await getGuildByDiscordId(targetUser.id);
+    const defenderData = await getGuildWithData(targetUser.id);
+    defenderGuild = defenderData.guild;
+    defenderUpgrades = defenderData.upgrades;
+    defenderPrestigeUpgrades = defenderData.prestigeUpgrades;
+    
     if (!defenderGuild) {
       return interaction.reply({
         embeds: [createErrorEmbed(`**${targetUser.username}** doesn't have a guild yet!`)],
@@ -139,9 +151,9 @@ export async function execute(interaction) {
     });
   }
   
-  // Calculate power and determine battle type
-  const attackerPower = await calculatePower(attackerGuild);
-  const defenderPower = await calculatePower(defenderGuild);
+  // Calculate power and determine battle type (using pre-loaded data - no extra queries)
+  const attackerPower = await calculatePower(attackerGuild, attackerUpgrades, attackerPrestigeUpgrades);
+  const defenderPower = await calculatePower(defenderGuild, defenderUpgrades, defenderPrestigeUpgrades);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -460,9 +472,14 @@ export async function handleBattleAccept(interaction) {
     });
   }
   
-  // Fetch fresh guild data
-  const attackerGuild = await getGuildByDiscordId(attackerDiscordId);
-  const defenderGuild = await getGuildByDiscordId(defenderDiscordId);
+  // Fetch fresh guild data with upgrades (1 query per guild instead of 3)
+  const [attackerData, defenderData] = await Promise.all([
+    getGuildWithData(attackerDiscordId),
+    getGuildWithData(defenderDiscordId),
+  ]);
+  
+  const attackerGuild = attackerData.guild;
+  const defenderGuild = defenderData.guild;
   
   if (!attackerGuild || !defenderGuild) {
     // Return bet to attacker if guild is missing
@@ -475,9 +492,9 @@ export async function handleBattleAccept(interaction) {
     });
   }
   
-  // Calculate power and battle type
-  const attackerPower = await calculatePower(attackerGuild);
-  const defenderPower = await calculatePower(defenderGuild);
+  // Calculate power and battle type (using pre-loaded data)
+  const attackerPower = await calculatePower(attackerGuild, attackerData.upgrades, attackerData.prestigeUpgrades);
+  const defenderPower = await calculatePower(defenderGuild, defenderData.upgrades, defenderData.prestigeUpgrades);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -593,8 +610,8 @@ export async function handleCounterAttack(interaction) {
     });
   }
   
-  // Get counter-attacker's guild (was the defender)
-  const counterAttackerGuild = await getGuildByDiscordId(interaction.user.id);
+  // Get counter-attacker's guild (was the defender) - combined query
+  const { guild: counterAttackerGuild } = await getGuildWithData(interaction.user.id);
   if (!counterAttackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
@@ -611,8 +628,8 @@ export async function handleCounterAttack(interaction) {
     });
   }
   
-  // Get original attacker's guild (now the defender)
-  const defenderGuild = await getGuildByDiscordId(originalAttackerId);
+  // Get original attacker's guild (now the defender) - combined query
+  const { guild: defenderGuild } = await getGuildWithData(originalAttackerId);
   if (!defenderGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('The original attacker no longer has a guild!')],
@@ -671,8 +688,8 @@ export async function handleMatchBet(interaction) {
     });
   }
   
-  // Get counter-attacker's guild (was the defender)
-  const counterAttackerGuild = await getGuildByDiscordId(interaction.user.id);
+  // Get counter-attacker's guild with data (combined query)
+  const { guild: counterAttackerGuild, upgrades: counterAttackerUpgrades, prestigeUpgrades: counterAttackerPrestigeUpgrades } = await getGuildWithData(interaction.user.id);
   if (!counterAttackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
@@ -683,7 +700,7 @@ export async function handleMatchBet(interaction) {
   // Determine bet amount (use same as original or max affordable)
   const betAmount = Math.min(suggestedBet, Number(counterAttackerGuild.gold));
   
-  await executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild);
+  await executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild, counterAttackerUpgrades, counterAttackerPrestigeUpgrades);
 }
 
 /**
@@ -693,8 +710,8 @@ export async function handleCounterAttackModal(interaction) {
   const [, originalAttackerId] = interaction.customId.split(':');
   const betInput = interaction.fields.getTextInputValue('bet_amount').trim().toLowerCase();
   
-  // Get counter-attacker's guild
-  const counterAttackerGuild = await getGuildByDiscordId(interaction.user.id);
+  // Get counter-attacker's guild with data (combined query)
+  const { guild: counterAttackerGuild, upgrades: counterAttackerUpgrades, prestigeUpgrades: counterAttackerPrestigeUpgrades } = await getGuildWithData(interaction.user.id);
   if (!counterAttackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('Your guild was not found. Please try again.')],
@@ -719,13 +736,13 @@ export async function handleCounterAttackModal(interaction) {
   // Cap to available gold
   betAmount = Math.min(betAmount, Number(counterAttackerGuild.gold));
   
-  await executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild);
+  await executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild, counterAttackerUpgrades, counterAttackerPrestigeUpgrades);
 }
 
 /**
  * Execute the counter-attack battle (shared logic)
  */
-async function executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild) {
+async function executeCounterAttack(interaction, betAmount, originalAttackerId, counterAttackerGuild, counterAttackerUpgrades = null, counterAttackerPrestigeUpgrades = null) {
   // Check cooldowns
   const cooldownCheck = checkBattleCooldowns(counterAttackerGuild);
   if (!cooldownCheck.canBattle) {
@@ -735,8 +752,8 @@ async function executeCounterAttack(interaction, betAmount, originalAttackerId, 
     });
   }
   
-  // Get original attacker's guild (now the defender)
-  const defenderGuild = await getGuildByDiscordId(originalAttackerId);
+  // Get original attacker's guild (now the defender) with data
+  const { guild: defenderGuild, upgrades: defenderUpgrades, prestigeUpgrades: defenderPrestigeUpgrades } = await getGuildWithData(originalAttackerId);
   if (!defenderGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('The original attacker no longer has a guild!')],
@@ -762,9 +779,9 @@ async function executeCounterAttack(interaction, betAmount, originalAttackerId, 
     });
   }
   
-  // Calculate power and battle type
-  const attackerPower = await calculatePower(counterAttackerGuild);
-  const defenderPower = await calculatePower(defenderGuild);
+  // Calculate power and battle type (using pre-loaded data when available)
+  const attackerPower = await calculatePower(counterAttackerGuild, counterAttackerUpgrades, counterAttackerPrestigeUpgrades);
+  const defenderPower = await calculatePower(defenderGuild, defenderUpgrades, defenderPrestigeUpgrades);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const battleType = getBattleType(powerRatio);
   const winChance = calculateWinChance(attackerPower, defenderPower);
@@ -934,8 +951,13 @@ export async function handleFreeRevenge(interaction) {
     });
   }
   
-  // Get defender's guild (counter-attacker)
-  const counterAttackerGuild = await getGuildByDiscordId(interaction.user.id);
+  // Get both guilds with data in parallel (combined queries)
+  const [counterAttackerData, defenderData] = await Promise.all([
+    getGuildWithData(interaction.user.id),
+    getGuildWithData(originalAttackerId),
+  ]);
+  
+  const counterAttackerGuild = counterAttackerData.guild;
   if (!counterAttackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
@@ -952,8 +974,7 @@ export async function handleFreeRevenge(interaction) {
     });
   }
   
-  // Get original attacker's guild (now the defender)
-  const defenderGuild = await getGuildByDiscordId(originalAttackerId);
+  const defenderGuild = defenderData.guild;
   if (!defenderGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('The original attacker no longer has a guild!')],
@@ -970,9 +991,9 @@ export async function handleFreeRevenge(interaction) {
     });
   }
   
-  // Calculate power and win chance
-  const attackerPower = await calculatePower(counterAttackerGuild);
-  const defenderPower = await calculatePower(defenderGuild);
+  // Calculate power and win chance (using pre-loaded data)
+  const attackerPower = await calculatePower(counterAttackerGuild, counterAttackerData.upgrades, counterAttackerData.prestigeUpgrades);
+  const defenderPower = await calculatePower(defenderGuild, defenderData.upgrades, defenderData.prestigeUpgrades);
   const powerRatio = calculatePowerRatio(attackerPower, defenderPower);
   const winChance = calculateWinChance(attackerPower, defenderPower);
   

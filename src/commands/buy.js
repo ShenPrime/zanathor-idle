@@ -13,7 +13,9 @@ import {
 import { getGuildByDiscordId } from '../database/guilds.js';
 import {
   getUpgradeByName,
+  getUpgradesByNames,
   getGuildUpgradeLevel,
+  getGuildUpgradeLevelsBatch,
   calculateUpgradeCost,
   calculateBulkPurchaseCost,
   calculateMaxAffordable,
@@ -195,10 +197,17 @@ export async function handleSelectMenu(interaction) {
   // Get guild to show costs
   const guild = await getGuildByDiscordId(interaction.user.id);
   
+  // Batch fetch all upgrades and their levels (2 queries instead of 2N)
+  const upgradeMap = await getUpgradesByNames(selectedUpgrades);
+  const upgradeIds = Array.from(upgradeMap.values()).map(u => u.id);
+  const levelMap = await getGuildUpgradeLevelsBatch(guild.id, upgradeIds);
+  
   for (let i = 0; i < selectedUpgrades.length && i < 5; i++) {
     const upgradeName = selectedUpgrades[i];
-    const upgrade = await getUpgradeByName(upgradeName);
-    const currentLevel = await getGuildUpgradeLevel(guild.id, upgrade.id);
+    const upgrade = upgradeMap.get(upgradeName.toLowerCase());
+    if (!upgrade) continue;
+    
+    const currentLevel = levelMap.get(upgrade.id) || 0;
     const cost = calculateUpgradeCost(upgrade, currentLevel);
     
     const textInput = new TextInputBuilder()
@@ -229,6 +238,11 @@ export async function handleModal(interaction) {
     });
   }
   
+  // Batch fetch all upgrades and their current levels (2 queries instead of 2N)
+  const upgradeMap = await getUpgradesByNames(upgradeNames);
+  const upgradeIds = Array.from(upgradeMap.values()).map(u => u.id);
+  const levelMap = await getGuildUpgradeLevelsBatch(guild.id, upgradeIds);
+  
   let remainingGold = guild.gold;
   const results = [];
   const skipped = [];
@@ -242,13 +256,13 @@ export async function handleModal(interaction) {
       continue;
     }
     
-    const upgrade = await getUpgradeByName(upgradeName);
+    const upgrade = upgradeMap.get(upgradeName.toLowerCase());
     if (!upgrade) {
       skipped.push({ name: upgradeName, reason: 'Upgrade not found' });
       continue;
     }
     
-    const currentLevel = await getGuildUpgradeLevel(guild.id, upgrade.id);
+    const currentLevel = levelMap.get(upgrade.id) || 0;
     
     // Check if already maxed
     if (upgrade.max_level && currentLevel >= upgrade.max_level) {

@@ -174,10 +174,20 @@ export function calculateRates(guild, bonuses, prestigeBonuses = null) {
 export async function calculateIdleEarnings(guild) {
   // Get guild's upgrades
   const upgrades = await getGuildUpgrades(guild.id);
-  const bonuses = calculateUpgradeBonuses(upgrades);
-
-  // Get prestige upgrades and calculate prestige bonuses
   const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+
+  return calculateIdleEarningsWithData(guild, upgrades, prestigeUpgrades);
+}
+
+/**
+ * Calculate idle earnings using pre-loaded data (no database queries)
+ * @param {Object} guild - Guild data from database
+ * @param {Array} upgrades - Pre-loaded guild upgrades
+ * @param {Array} prestigeUpgrades - Pre-loaded prestige upgrades
+ * @returns {Object} Earnings and time elapsed
+ */
+export function calculateIdleEarningsWithData(guild, upgrades, prestigeUpgrades) {
+  const bonuses = calculateUpgradeBonuses(upgrades);
   const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
 
   const rates = calculateRates(guild, bonuses, prestigeBonuses);

@@ -1,16 +1,15 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getGuildByDiscordId } from '../database/guilds.js';
-import { getGuildUpgrades } from '../database/upgrades.js';
-import { getOwnedPrestigeUpgrades } from '../database/prestige.js';
+import { getGuildWithData } from '../database/guilds.js';
 import { createGuildEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { calculateRates, calculateUpgradeBonuses, calculatePrestigeBonuses, getEffectiveCapacity, calculateIdleEarnings } from '../game/idle.js';
+import { calculateRates, calculateUpgradeBonuses, calculatePrestigeBonuses, getEffectiveCapacity, calculateIdleEarningsWithData } from '../game/idle.js';
 
 export const data = new SlashCommandBuilder()
   .setName('guild')
   .setDescription('View your guild\'s stats and information');
 
 export async function execute(interaction) {
-  const guild = await getGuildByDiscordId(interaction.user.id);
+  // Single combined query instead of 3 separate queries
+  const { guild, upgrades, prestigeUpgrades } = await getGuildWithData(interaction.user.id);
   
   if (!guild) {
     return interaction.reply({
@@ -19,18 +18,13 @@ export async function execute(interaction) {
     });
   }
   
-  // Get upgrades and calculate bonuses
-  const upgrades = await getGuildUpgrades(guild.id);
+  // Calculate bonuses using pre-loaded data
   const bonuses = calculateUpgradeBonuses(upgrades);
-  
-  // Get prestige upgrades and calculate prestige bonuses
-  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
   const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
-  
   const rates = calculateRates(guild, bonuses, prestigeBonuses);
   
-  // Calculate pending earnings
-  const pendingEarnings = await calculateIdleEarnings(guild);
+  // Calculate pending earnings using pre-loaded data (no extra queries)
+  const pendingEarnings = calculateIdleEarningsWithData(guild, upgrades, prestigeUpgrades);
   
   // Update capacity display with bonus
   const effectiveCapacity = getEffectiveCapacity(guild, bonuses);

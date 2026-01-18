@@ -2,6 +2,99 @@ import { sql } from './connection.js';
 import { GAME } from '../config.js';
 
 /**
+ * Get guild with all related data (upgrades and prestige upgrades) in a single query
+ * This combines 3 separate queries into 1 for major performance improvement
+ * @param {string} discordId - Discord user ID
+ * @returns {Promise<{guild: Object|null, upgrades: Array, prestigeUpgrades: Array}>}
+ */
+export async function getGuildWithData(discordId) {
+  // Use a single query with JSON aggregation to fetch all data at once
+  const [result] = await sql`
+    SELECT 
+      g.*,
+      COALESCE(
+        (SELECT json_agg(row_to_json(u))
+         FROM (
+           SELECT gu.*, up.name, up.description, up.category, up.effect_type, up.effect_value, up.max_level
+           FROM guild_upgrades gu
+           JOIN upgrades up ON gu.upgrade_id = up.id
+           WHERE gu.guild_id = g.id
+         ) u
+        ), '[]'::json
+      ) as upgrades,
+      COALESCE(
+        (SELECT json_agg(row_to_json(p))
+         FROM (
+           SELECT pu.*, gpu.level
+           FROM prestige_upgrades pu
+           JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id
+           WHERE gpu.guild_id = g.id
+         ) p
+        ), '[]'::json
+      ) as prestige_upgrades
+    FROM guilds g
+    WHERE g.discord_id = ${discordId}
+  `;
+
+  if (!result) {
+    return { guild: null, upgrades: [], prestigeUpgrades: [] };
+  }
+
+  // Extract and parse the JSON arrays
+  const upgrades = result.upgrades || [];
+  const prestigeUpgrades = result.prestige_upgrades || [];
+
+  // Remove the JSON fields from the guild object to keep it clean
+  const { upgrades: _, prestige_upgrades: __, ...guild } = result;
+
+  return { guild, upgrades, prestigeUpgrades };
+}
+
+/**
+ * Get guild with all related data by guild ID
+ * @param {number} id - Guild ID
+ * @returns {Promise<{guild: Object|null, upgrades: Array, prestigeUpgrades: Array}>}
+ */
+export async function getGuildWithDataById(id) {
+  const [result] = await sql`
+    SELECT 
+      g.*,
+      COALESCE(
+        (SELECT json_agg(row_to_json(u))
+         FROM (
+           SELECT gu.*, up.name, up.description, up.category, up.effect_type, up.effect_value, up.max_level
+           FROM guild_upgrades gu
+           JOIN upgrades up ON gu.upgrade_id = up.id
+           WHERE gu.guild_id = g.id
+         ) u
+        ), '[]'::json
+      ) as upgrades,
+      COALESCE(
+        (SELECT json_agg(row_to_json(p))
+         FROM (
+           SELECT pu.*, gpu.level
+           FROM prestige_upgrades pu
+           JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id
+           WHERE gpu.guild_id = g.id
+         ) p
+        ), '[]'::json
+      ) as prestige_upgrades
+    FROM guilds g
+    WHERE g.id = ${id}
+  `;
+
+  if (!result) {
+    return { guild: null, upgrades: [], prestigeUpgrades: [] };
+  }
+
+  const upgrades = result.upgrades || [];
+  const prestigeUpgrades = result.prestige_upgrades || [];
+  const { upgrades: _, prestige_upgrades: __, ...guild } = result;
+
+  return { guild, upgrades, prestigeUpgrades };
+}
+
+/**
  * Create a new guild for a player
  * @param {string} discordId - Discord user ID
  * @param {string} name - Guild name
@@ -49,6 +142,33 @@ export async function collectResources(id, goldToAdd, xpToAdd) {
     SET gold = gold + ${goldToAdd},
         xp = xp + ${xpToAdd},
         last_collected_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return guild;
+}
+
+/**
+ * Full collection update - combines collectResources, updateAdventurerCount, 
+ * incrementStats, and updatePeakGold into a single query
+ * @param {number} id - Guild ID
+ * @param {number} goldToAdd - Gold to add
+ * @param {number} xpToAdd - XP to add
+ * @param {number} newAdventurerCount - New adventurer count
+ * @param {number} adventurersRecruited - Number of adventurers recruited this collection
+ * @returns {Promise<Object>} Updated guild
+ */
+export async function collectResourcesFull(id, goldToAdd, xpToAdd, newAdventurerCount, adventurersRecruited = 0) {
+  const [guild] = await sql`
+    UPDATE guilds 
+    SET gold = gold + ${goldToAdd},
+        xp = xp + ${xpToAdd},
+        adventurer_count = ${newAdventurerCount},
+        last_collected_at = NOW(),
+        lifetime_gold_earned = lifetime_gold_earned + ${goldToAdd},
+        lifetime_xp_earned = lifetime_xp_earned + ${xpToAdd},
+        lifetime_adventurers_recruited = lifetime_adventurers_recruited + ${adventurersRecruited},
+        peak_gold_balance = GREATEST(peak_gold_balance, gold + ${goldToAdd})
     WHERE id = ${id}
     RETURNING *
   `;

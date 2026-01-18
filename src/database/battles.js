@@ -31,15 +31,20 @@ const FREE_REVENGE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
  * Power = adventurers + (goldPerHour / 500) + (xp / 5000)
  * Uses actual production rates (with upgrades/prestige) instead of held gold
  * @param {Object} guild - Guild object
+ * @param {Array} [upgrades] - Pre-loaded upgrades (optional, will fetch if not provided)
+ * @param {Array} [prestigeUpgrades] - Pre-loaded prestige upgrades (optional, will fetch if not provided)
  * @returns {Promise<number>} Power value
  */
-export async function calculatePower(guild) {
-  // Get guild's upgrades and calculate bonuses
-  const upgrades = await getGuildUpgrades(guild.id);
-  const bonuses = calculateUpgradeBonuses(upgrades);
+export async function calculatePower(guild, upgrades = null, prestigeUpgrades = null) {
+  // Use provided data or fetch if not provided
+  if (upgrades === null) {
+    upgrades = await getGuildUpgrades(guild.id);
+  }
+  if (prestigeUpgrades === null) {
+    prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+  }
   
-  // Get prestige upgrades and calculate prestige bonuses
-  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
+  const bonuses = calculateUpgradeBonuses(upgrades);
   const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
   
   // Calculate rates with all bonuses applied

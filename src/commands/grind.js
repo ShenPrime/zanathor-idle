@@ -7,8 +7,7 @@ import {
   ComponentType,
   MessageFlags,
 } from 'discord.js';
-import { getGuildByDiscordId, flushGrindData, incrementStats } from '../database/guilds.js';
-import { getGuildUpgrades } from '../database/upgrades.js';
+import { getGuildWithData, flushGrindData, incrementStats } from '../database/guilds.js';
 import { calculateUpgradeBonuses } from '../game/idle.js';
 import { checkAndApplyLevelUp } from '../game/leveling.js';
 import { GAME, getRankForLevel } from '../config.js';
@@ -52,8 +51,8 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   const odId = interaction.user.id;
   
-  // Check if player has a guild
-  const guild = await getGuildByDiscordId(odId);
+  // Check if player has a guild (combined query - 1 query instead of 2)
+  const { guild, upgrades } = await getGuildWithData(odId);
   
   if (!guild) {
     return interaction.reply({
@@ -65,8 +64,7 @@ export async function execute(interaction) {
   // Flush any existing session for this user
   await flushSession(odId, true);
   
-  // Calculate click rates
-  const upgrades = await getGuildUpgrades(guild.id);
+  // Calculate click rates using pre-loaded upgrades
   const bonuses = calculateUpgradeBonuses(upgrades);
   const rank = getRankForLevel(guild.level);
   

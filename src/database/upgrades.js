@@ -44,6 +44,54 @@ export async function getUpgradeByName(name) {
 }
 
 /**
+ * Get multiple upgrades by names (batch fetch)
+ * @param {string[]} names - Array of upgrade names
+ * @returns {Promise<Map<string, Object>>} Map of lowercase name -> upgrade
+ */
+export async function getUpgradesByNames(names) {
+  if (names.length === 0) return new Map();
+  
+  // Normalize names to lowercase for comparison
+  const lowerNames = names.map(n => n.toLowerCase());
+  
+  const upgrades = await sql`
+    SELECT * FROM upgrades 
+    WHERE LOWER(name) = ANY(${lowerNames})
+  `;
+  
+  // Create a map keyed by lowercase name for easy lookup
+  const upgradeMap = new Map();
+  for (const upgrade of upgrades) {
+    upgradeMap.set(upgrade.name.toLowerCase(), upgrade);
+  }
+  
+  return upgradeMap;
+}
+
+/**
+ * Get guild upgrade levels for multiple upgrades at once (batch fetch)
+ * @param {number} guildId - Guild ID
+ * @param {number[]} upgradeIds - Array of upgrade IDs
+ * @returns {Promise<Map<number, number>>} Map of upgradeId -> level
+ */
+export async function getGuildUpgradeLevelsBatch(guildId, upgradeIds) {
+  if (upgradeIds.length === 0) return new Map();
+  
+  const results = await sql`
+    SELECT upgrade_id, level FROM guild_upgrades 
+    WHERE guild_id = ${guildId} AND upgrade_id = ANY(${upgradeIds})
+  `;
+  
+  // Create a map keyed by upgrade_id
+  const levelMap = new Map();
+  for (const row of results) {
+    levelMap.set(row.upgrade_id, row.level);
+  }
+  
+  return levelMap;
+}
+
+/**
  * Get all upgrades a guild has purchased
  * @param {number} guildId - Guild ID
  * @returns {Promise<Array>} Guild's upgrades with upgrade details
