@@ -58,7 +58,7 @@ export async function getUpgradesByNames(names) {
   
   const upgrades = await sql`
     SELECT * FROM upgrades 
-    WHERE LOWER(name) = ANY(${lowerNames})
+    WHERE LOWER(name) = ANY(${lowerNames}::text[])
   `;
   
   // Create a map keyed by lowercase name for easy lookup
@@ -81,7 +81,7 @@ export async function getGuildUpgradeLevelsBatch(guildId, upgradeIds) {
   
   const results = await sql`
     SELECT upgrade_id, level FROM guild_upgrades 
-    WHERE guild_id = ${guildId} AND upgrade_id = ANY(${upgradeIds})
+    WHERE guild_id = ${guildId} AND upgrade_id = ANY(${upgradeIds}::integer[])
   `;
   
   // Create a map keyed by upgrade_id
