@@ -54,11 +54,18 @@ export async function getUpgradesByNames(names) {
   if (nameArray.length === 0) return new Map();
   
   // Normalize names to lowercase for comparison
-  const lowerNames = nameArray.map(n => n.toLowerCase());
+  // Validate that all items are strings
+  const lowerNames = nameArray
+    .filter(n => typeof n === 'string')
+    .map(n => n.toLowerCase());
+  if (lowerNames.length !== nameArray.length) {
+    console.error('Invalid names detected in getUpgradesByNames:', nameArray);
+  }
+  if (lowerNames.length === 0) return new Map();
   
   const upgrades = await sql`
     SELECT * FROM upgrades 
-    WHERE LOWER(name) = ANY(${lowerNames}::text[])
+    WHERE LOWER(name) = ANY(${sql.array(lowerNames)})
   `;
   
   // Create a map keyed by lowercase name for easy lookup
@@ -77,11 +84,18 @@ export async function getUpgradesByNames(names) {
  * @returns {Promise<Map<number, number>>} Map of upgradeId -> level
  */
 export async function getGuildUpgradeLevelsBatch(guildId, upgradeIds) {
-  if (upgradeIds.length === 0) return new Map();
+  if (!upgradeIds || upgradeIds.length === 0) return new Map();
+  
+  // Validate array structure - ensure flat array of numbers
+  const validIds = upgradeIds.filter(id => typeof id === 'number' && Number.isFinite(id));
+  if (validIds.length !== upgradeIds.length) {
+    console.error('Invalid upgradeIds detected:', upgradeIds);
+  }
+  if (validIds.length === 0) return new Map();
   
   const results = await sql`
     SELECT upgrade_id, level FROM guild_upgrades 
-    WHERE guild_id = ${guildId} AND upgrade_id = ANY(${upgradeIds}::integer[])
+    WHERE guild_id = ${guildId} AND upgrade_id = ANY(${sql.array(validIds)})
   `;
   
   // Create a map keyed by upgrade_id
