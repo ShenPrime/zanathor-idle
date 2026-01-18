@@ -1,4 +1,4 @@
-import { query, getClient } from './connection.js';
+import { sql } from './connection.js';
 import { getRankForLevel } from '../config.js';
 import { getGuildUpgrades } from './upgrades.js';
 import { getOwnedPrestigeUpgrades } from './prestige.js';
@@ -238,16 +238,15 @@ export function checkBattleCooldowns(attackerGuild) {
 export async function checkTargetCooldown(attackerId, defenderId) {
   if (TARGET_COOLDOWN_MS === 0) return { canBattle: true };
   
-  const result = await query(
-    `SELECT created_at FROM battles 
-     WHERE attacker_id = $1 AND defender_id = $2 
-     ORDER BY created_at DESC LIMIT 1`,
-    [attackerId, defenderId]
-  );
+  const result = await sql`
+    SELECT created_at FROM battles 
+    WHERE attacker_id = ${attackerId} AND defender_id = ${defenderId} 
+    ORDER BY created_at DESC LIMIT 1
+  `;
   
-  if (result.rows.length === 0) return { canBattle: true };
+  if (result.length === 0) return { canBattle: true };
   
-  const lastBattle = new Date(result.rows[0].created_at);
+  const lastBattle = new Date(result[0].created_at);
   const now = new Date();
   const timeSince = now - lastBattle;
   
@@ -269,11 +268,8 @@ export async function checkTargetCooldown(attackerId, defenderId) {
  * @returns {Promise<Object|null>} Random guild or null
  */
 export async function getRandomTarget(attackerId) {
-  const result = await query(
-    `SELECT * FROM guilds WHERE id != $1 ORDER BY RANDOM() LIMIT 1`,
-    [attackerId]
-  );
-  return result.rows[0] || null;
+  const [guild] = await sql`SELECT * FROM guilds WHERE id != ${attackerId} ORDER BY RANDOM() LIMIT 1`;
+  return guild || null;
 }
 
 /**
@@ -299,20 +295,20 @@ export async function recordBattle({
   const currentBattles = lastReset === today ? (attackerGuild.battles_today || 0) : 0;
   
   // Record the battle
-  const battleResult = await query(
-    `INSERT INTO battles (attacker_id, defender_id, bet_amount, winner_id, gold_transferred, xp_transferred, attacker_power, defender_power, win_chance)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING *`,
-    [attackerGuild.id, defenderGuild.id, betAmount, winnerId, goldTransferred, xpTransferred, attackerPower, defenderPower, winChance]
-  );
+  const [battle] = await sql`
+    INSERT INTO battles (attacker_id, defender_id, bet_amount, winner_id, gold_transferred, xp_transferred, attacker_power, defender_power, win_chance)
+    VALUES (${attackerGuild.id}, ${defenderGuild.id}, ${betAmount}, ${winnerId}, ${goldTransferred}, ${xpTransferred}, ${attackerPower}, ${defenderPower}, ${winChance})
+    RETURNING *
+  `;
   
   // Update attacker's cooldown tracking
-  await query(
-    `UPDATE guilds SET last_battle_at = NOW(), battles_today = $2, last_battle_reset = $3 WHERE id = $1`,
-    [attackerGuild.id, currentBattles + 1, today]
-  );
+  await sql`
+    UPDATE guilds 
+    SET last_battle_at = NOW(), battles_today = ${currentBattles + 1}, last_battle_reset = ${today} 
+    WHERE id = ${attackerGuild.id}
+  `;
   
-  return battleResult.rows[0];
+  return battle;
 }
 
 /**
@@ -324,50 +320,30 @@ export async function recordBattle({
  * @param {number} xpBonus - XP bonus for winner (not taken from loser)
  */
 export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonus) {
-  const client = await getClient();
-  
-  try {
-    await client.query('BEGIN');
-    
+  await sql.begin(async (tx) => {
     // Winner gains gold and XP bonus
-    await client.query(
-      `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
-      [winnerId, goldTransfer, xpBonus]
-    );
+    await tx`UPDATE guilds SET gold = gold + ${goldTransfer}, xp = xp + ${xpBonus} WHERE id = ${winnerId}`;
     
     // Loser loses gold (no XP loss in new system)
-    await client.query(
-      `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
-      [loserId, goldTransfer]
-    );
+    await tx`UPDATE guilds SET gold = GREATEST(0, gold - ${goldTransfer}) WHERE id = ${loserId}`;
     
     // Update lifetime stats for winner
-    await client.query(
-      `UPDATE guilds SET 
-         lifetime_battles_won = lifetime_battles_won + 1,
-         lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
-         lifetime_battle_xp_won = lifetime_battle_xp_won + $3
-       WHERE id = $1`,
-      [winnerId, goldTransfer, xpBonus]
-    );
+    await tx`
+      UPDATE guilds SET 
+        lifetime_battles_won = lifetime_battles_won + 1,
+        lifetime_battle_gold_won = lifetime_battle_gold_won + ${goldTransfer},
+        lifetime_battle_xp_won = lifetime_battle_xp_won + ${xpBonus}
+      WHERE id = ${winnerId}
+    `;
     
     // Update lifetime stats for loser
-    await client.query(
-      `UPDATE guilds SET 
-         lifetime_battles_lost = lifetime_battles_lost + 1,
-         lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
-       WHERE id = $1`,
-      [loserId, goldTransfer]
-    );
-    
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Failed to apply battle results, rolling back:', error);
-    throw error; // Re-throw so caller knows the battle failed
-  } finally {
-    client.release();
-  }
+    await tx`
+      UPDATE guilds SET 
+        lifetime_battles_lost = lifetime_battles_lost + 1,
+        lifetime_battle_gold_lost = lifetime_battle_gold_lost + ${goldTransfer}
+      WHERE id = ${loserId}
+    `;
+  });
 }
 
 /**
@@ -382,61 +358,33 @@ export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonu
  * @param {number} xpBonus - XP bonus if defender wins
  */
 export async function applyFreeRevengeResults(defenderId, attackerId, defenderWon, goldReward, xpBonus) {
-  const client = await getClient();
-  
-  try {
-    await client.query('BEGIN');
-    
+  await sql.begin(async (tx) => {
     if (defenderWon) {
       // Defender wins: gets gold and XP from attacker
-      await client.query(
-        `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
-        [defenderId, goldReward, xpBonus]
-      );
-      
-      await client.query(
-        `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
-        [attackerId, goldReward]
-      );
+      await tx`UPDATE guilds SET gold = gold + ${goldReward}, xp = xp + ${xpBonus} WHERE id = ${defenderId}`;
+      await tx`UPDATE guilds SET gold = GREATEST(0, gold - ${goldReward}) WHERE id = ${attackerId}`;
       
       // Update lifetime stats
-      await client.query(
-        `UPDATE guilds SET 
-           lifetime_battles_won = lifetime_battles_won + 1,
-           lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
-           lifetime_battle_xp_won = lifetime_battle_xp_won + $3
-         WHERE id = $1`,
-        [defenderId, goldReward, xpBonus]
-      );
+      await tx`
+        UPDATE guilds SET 
+          lifetime_battles_won = lifetime_battles_won + 1,
+          lifetime_battle_gold_won = lifetime_battle_gold_won + ${goldReward},
+          lifetime_battle_xp_won = lifetime_battle_xp_won + ${xpBonus}
+        WHERE id = ${defenderId}
+      `;
       
-      await client.query(
-        `UPDATE guilds SET 
-           lifetime_battles_lost = lifetime_battles_lost + 1,
-           lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
-         WHERE id = $1`,
-        [attackerId, goldReward]
-      );
+      await tx`
+        UPDATE guilds SET 
+          lifetime_battles_lost = lifetime_battles_lost + 1,
+          lifetime_battle_gold_lost = lifetime_battle_gold_lost + ${goldReward}
+        WHERE id = ${attackerId}
+      `;
     } else {
       // Defender loses: nothing happens (free revenge), but still count as a loss
-      await client.query(
-        `UPDATE guilds SET lifetime_battles_lost = lifetime_battles_lost + 1 WHERE id = $1`,
-        [defenderId]
-      );
-      
-      await client.query(
-        `UPDATE guilds SET lifetime_battles_won = lifetime_battles_won + 1 WHERE id = $1`,
-        [attackerId]
-      );
+      await tx`UPDATE guilds SET lifetime_battles_lost = lifetime_battles_lost + 1 WHERE id = ${defenderId}`;
+      await tx`UPDATE guilds SET lifetime_battles_won = lifetime_battles_won + 1 WHERE id = ${attackerId}`;
     }
-    
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Failed to apply free revenge results, rolling back:', error);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**
@@ -446,25 +394,24 @@ export async function applyFreeRevengeResults(defenderId, attackerId, defenderWo
  * @returns {Promise<Array>} Recent battles with participant info
  */
 export async function getBattleHistory(guildId, limit = 10) {
-  const result = await query(
-    `SELECT 
-       b.*,
-       att.name as attacker_name,
-       att.discord_id as attacker_discord_id,
-       def.name as defender_name,
-       def.discord_id as defender_discord_id,
-       win.name as winner_name,
-       win.discord_id as winner_discord_id
-     FROM battles b
-     JOIN guilds att ON b.attacker_id = att.id
-     JOIN guilds def ON b.defender_id = def.id
-     JOIN guilds win ON b.winner_id = win.id
-     WHERE b.attacker_id = $1 OR b.defender_id = $1
-     ORDER BY b.created_at DESC
-     LIMIT $2`,
-    [guildId, limit]
-  );
-  return result.rows;
+  const result = await sql`
+    SELECT 
+      b.*,
+      att.name as attacker_name,
+      att.discord_id as attacker_discord_id,
+      def.name as defender_name,
+      def.discord_id as defender_discord_id,
+      win.name as winner_name,
+      win.discord_id as winner_discord_id
+    FROM battles b
+    JOIN guilds att ON b.attacker_id = att.id
+    JOIN guilds def ON b.defender_id = def.id
+    JOIN guilds win ON b.winner_id = win.id
+    WHERE b.attacker_id = ${guildId} OR b.defender_id = ${guildId}
+    ORDER BY b.created_at DESC
+    LIMIT ${limit}
+  `;
+  return result;
 }
 
 /**
@@ -502,11 +449,12 @@ export function getDailyBattleLimit() {
  * @returns {Promise<boolean>} True if successful
  */
 export async function lockBetGold(guildId, amount) {
-  const result = await query(
-    `UPDATE guilds SET gold = gold - $2 WHERE id = $1 AND gold >= $2 RETURNING *`,
-    [guildId, amount]
-  );
-  return result.rows.length > 0;
+  const result = await sql`
+    UPDATE guilds SET gold = gold - ${amount} 
+    WHERE id = ${guildId} AND gold >= ${amount} 
+    RETURNING *
+  `;
+  return result.length > 0;
 }
 
 /**
@@ -516,10 +464,7 @@ export async function lockBetGold(guildId, amount) {
  * @returns {Promise<void>}
  */
 export async function unlockBetGold(guildId, amount) {
-  await query(
-    `UPDATE guilds SET gold = gold + $2 WHERE id = $1`,
-    [guildId, amount]
-  );
+  await sql`UPDATE guilds SET gold = gold + ${amount} WHERE id = ${guildId}`;
 }
 
 /**

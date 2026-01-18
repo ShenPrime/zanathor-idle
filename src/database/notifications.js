@@ -1,4 +1,4 @@
-import { query } from './connection.js';
+import { sql } from './connection.js';
 
 /**
  * Get notification settings for a guild
@@ -6,11 +6,8 @@ import { query } from './connection.js';
  * @returns {Promise<Object|null>} Notification settings or null
  */
 export async function getNotificationSettings(guildId) {
-  const result = await query(
-    'SELECT * FROM notification_settings WHERE guild_id = $1',
-    [guildId]
-  );
-  return result.rows[0] || null;
+  const [settings] = await sql`SELECT * FROM notification_settings WHERE guild_id = ${guildId}`;
+  return settings || null;
 }
 
 /**
@@ -19,15 +16,14 @@ export async function getNotificationSettings(guildId) {
  * @returns {Promise<Object>} Updated settings
  */
 export async function enableReminders(guildId) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled, dm_failures)
-     VALUES ($1, TRUE, 0)
-     ON CONFLICT (guild_id) 
-     DO UPDATE SET dm_reminders_enabled = TRUE, dm_failures = 0
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, dm_reminders_enabled, dm_failures)
+    VALUES (${guildId}, TRUE, 0)
+    ON CONFLICT (guild_id) 
+    DO UPDATE SET dm_reminders_enabled = TRUE, dm_failures = 0
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -36,15 +32,14 @@ export async function enableReminders(guildId) {
  * @returns {Promise<Object>} Updated settings
  */
 export async function disableReminders(guildId) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled)
-     VALUES ($1, FALSE)
-     ON CONFLICT (guild_id) 
-     DO UPDATE SET dm_reminders_enabled = FALSE
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, dm_reminders_enabled)
+    VALUES (${guildId}, FALSE)
+    ON CONFLICT (guild_id) 
+    DO UPDATE SET dm_reminders_enabled = FALSE
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -53,14 +48,13 @@ export async function disableReminders(guildId) {
  * @returns {Promise<Object>} Updated settings
  */
 export async function updateLastReminderTime(guildId) {
-  const result = await query(
-    `UPDATE notification_settings 
-     SET last_reminder_at = NOW()
-     WHERE guild_id = $1
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    UPDATE notification_settings 
+    SET last_reminder_at = NOW()
+    WHERE guild_id = ${guildId}
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -71,24 +65,20 @@ export async function updateLastReminderTime(guildId) {
  */
 export async function recordDmFailure(guildId, maxFailures = 3) {
   // Increment failure count
-  const result = await query(
-    `UPDATE notification_settings 
-     SET dm_failures = dm_failures + 1
-     WHERE guild_id = $1
-     RETURNING *`,
-    [guildId]
-  );
-  
-  const settings = result.rows[0];
+  const [settings] = await sql`
+    UPDATE notification_settings 
+    SET dm_failures = dm_failures + 1
+    WHERE guild_id = ${guildId}
+    RETURNING *
+  `;
   
   // Auto-disable if too many failures
   if (settings && settings.dm_failures >= maxFailures) {
-    await query(
-      `UPDATE notification_settings 
-       SET dm_reminders_enabled = FALSE
-       WHERE guild_id = $1`,
-      [guildId]
-    );
+    await sql`
+      UPDATE notification_settings 
+      SET dm_reminders_enabled = FALSE
+      WHERE guild_id = ${guildId}
+    `;
     return { ...settings, wasDisabled: true };
   }
   
@@ -101,15 +91,15 @@ export async function recordDmFailure(guildId, maxFailures = 3) {
  * @returns {Promise<Array>} Guilds with their discord_id and notification settings
  */
 export async function getGuildsEligibleForReminder() {
-  const result = await query(
-    `SELECT g.*, ns.last_reminder_at, ns.dm_failures
-     FROM guilds g
-     JOIN notification_settings ns ON g.id = ns.guild_id
-     WHERE ns.dm_reminders_enabled = TRUE
-       AND (ns.last_reminder_at IS NULL 
-            OR ns.last_reminder_at < NOW() - INTERVAL '4 hours')`
-  );
-  return result.rows;
+  const result = await sql`
+    SELECT g.*, ns.last_reminder_at, ns.dm_failures
+    FROM guilds g
+    JOIN notification_settings ns ON g.id = ns.guild_id
+    WHERE ns.dm_reminders_enabled = TRUE
+      AND (ns.last_reminder_at IS NULL 
+           OR ns.last_reminder_at < NOW() - INTERVAL '4 hours')
+  `;
+  return result;
 }
 
 /**
@@ -118,15 +108,14 @@ export async function getGuildsEligibleForReminder() {
  * @returns {Promise<Object>} Updated settings
  */
 export async function enableBattleNotifications(guildId) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
-     VALUES ($1, TRUE)
-     ON CONFLICT (guild_id) 
-     DO UPDATE SET battle_notifications_enabled = TRUE
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
+    VALUES (${guildId}, TRUE)
+    ON CONFLICT (guild_id) 
+    DO UPDATE SET battle_notifications_enabled = TRUE
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -135,15 +124,14 @@ export async function enableBattleNotifications(guildId) {
  * @returns {Promise<Object>} Updated settings
  */
 export async function disableBattleNotifications(guildId) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
-     VALUES ($1, FALSE)
-     ON CONFLICT (guild_id) 
-     DO UPDATE SET battle_notifications_enabled = FALSE
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, battle_notifications_enabled)
+    VALUES (${guildId}, FALSE)
+    ON CONFLICT (guild_id) 
+    DO UPDATE SET battle_notifications_enabled = FALSE
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -154,18 +142,17 @@ export async function disableBattleNotifications(guildId) {
  * @returns {Promise<Object>} Updated settings
  */
 export async function updateAllNotificationSettings(guildId, collectionReminders, battleNotifications) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
-     VALUES ($1, $2, $3, 0)
-     ON CONFLICT (guild_id) 
-     DO UPDATE SET 
-       dm_reminders_enabled = $2, 
-       battle_notifications_enabled = $3,
-       dm_failures = 0
-     RETURNING *`,
-    [guildId, collectionReminders, battleNotifications]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
+    VALUES (${guildId}, ${collectionReminders}, ${battleNotifications}, 0)
+    ON CONFLICT (guild_id) 
+    DO UPDATE SET 
+      dm_reminders_enabled = ${collectionReminders}, 
+      battle_notifications_enabled = ${battleNotifications},
+      dm_failures = 0
+    RETURNING *
+  `;
+  return settings;
 }
 
 /**
@@ -174,12 +161,11 @@ export async function updateAllNotificationSettings(guildId, collectionReminders
  * @returns {Promise<Object>} Created settings
  */
 export async function createDefaultNotificationSettings(guildId) {
-  const result = await query(
-    `INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
-     VALUES ($1, FALSE, FALSE, 0)
-     ON CONFLICT (guild_id) DO NOTHING
-     RETURNING *`,
-    [guildId]
-  );
-  return result.rows[0];
+  const [settings] = await sql`
+    INSERT INTO notification_settings (guild_id, dm_reminders_enabled, battle_notifications_enabled, dm_failures)
+    VALUES (${guildId}, FALSE, FALSE, 0)
+    ON CONFLICT (guild_id) DO NOTHING
+    RETURNING *
+  `;
+  return settings;
 }

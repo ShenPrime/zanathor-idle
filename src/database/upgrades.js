@@ -1,14 +1,12 @@
-import { query, getClient } from './connection.js';
+import { sql } from './connection.js';
 
 /**
  * Get all available upgrades
  * @returns {Promise<Array>} All upgrades
  */
 export async function getAllUpgrades() {
-  const result = await query(
-    `SELECT * FROM upgrades ORDER BY category, required_guild_level, base_cost`
-  );
-  return result.rows;
+  const result = await sql`SELECT * FROM upgrades ORDER BY category, required_guild_level, base_cost`;
+  return result;
 }
 
 /**
@@ -17,11 +15,12 @@ export async function getAllUpgrades() {
  * @returns {Promise<Array>} Upgrades in category
  */
 export async function getUpgradesByCategory(category) {
-  const result = await query(
-    `SELECT * FROM upgrades WHERE category = $1 ORDER BY required_guild_level, base_cost`,
-    [category]
-  );
-  return result.rows;
+  const result = await sql`
+    SELECT * FROM upgrades 
+    WHERE category = ${category} 
+    ORDER BY required_guild_level, base_cost
+  `;
+  return result;
 }
 
 /**
@@ -30,11 +29,8 @@ export async function getUpgradesByCategory(category) {
  * @returns {Promise<Object|null>} The upgrade or null
  */
 export async function getUpgradeById(upgradeId) {
-  const result = await query(
-    'SELECT * FROM upgrades WHERE id = $1',
-    [upgradeId]
-  );
-  return result.rows[0] || null;
+  const [upgrade] = await sql`SELECT * FROM upgrades WHERE id = ${upgradeId}`;
+  return upgrade || null;
 }
 
 /**
@@ -43,11 +39,8 @@ export async function getUpgradeById(upgradeId) {
  * @returns {Promise<Object|null>} The upgrade or null
  */
 export async function getUpgradeByName(name) {
-  const result = await query(
-    'SELECT * FROM upgrades WHERE LOWER(name) = LOWER($1)',
-    [name]
-  );
-  return result.rows[0] || null;
+  const [upgrade] = await sql`SELECT * FROM upgrades WHERE LOWER(name) = LOWER(${name})`;
+  return upgrade || null;
 }
 
 /**
@@ -56,14 +49,13 @@ export async function getUpgradeByName(name) {
  * @returns {Promise<Array>} Guild's upgrades with upgrade details
  */
 export async function getGuildUpgrades(guildId) {
-  const result = await query(
-    `SELECT gu.*, u.name, u.description, u.category, u.effect_type, u.effect_value, u.max_level
-     FROM guild_upgrades gu
-     JOIN upgrades u ON gu.upgrade_id = u.id
-     WHERE gu.guild_id = $1`,
-    [guildId]
-  );
-  return result.rows;
+  const result = await sql`
+    SELECT gu.*, u.name, u.description, u.category, u.effect_type, u.effect_value, u.max_level
+    FROM guild_upgrades gu
+    JOIN upgrades u ON gu.upgrade_id = u.id
+    WHERE gu.guild_id = ${guildId}
+  `;
+  return result;
 }
 
 /**
@@ -73,11 +65,11 @@ export async function getGuildUpgrades(guildId) {
  * @returns {Promise<number>} Current level (0 if not purchased)
  */
 export async function getGuildUpgradeLevel(guildId, upgradeId) {
-  const result = await query(
-    'SELECT level FROM guild_upgrades WHERE guild_id = $1 AND upgrade_id = $2',
-    [guildId, upgradeId]
-  );
-  return result.rows[0]?.level || 0;
+  const [result] = await sql`
+    SELECT level FROM guild_upgrades 
+    WHERE guild_id = ${guildId} AND upgrade_id = ${upgradeId}
+  `;
+  return result?.level || 0;
 }
 
 /**
@@ -88,39 +80,29 @@ export async function getGuildUpgradeLevel(guildId, upgradeId) {
  * @returns {Promise<Object>} The guild_upgrade record
  */
 export async function purchaseUpgrade(guildId, upgradeId, cost) {
-  const client = await getClient();
-  
-  try {
-    await client.query('BEGIN');
-    
+  return await sql.begin(async (tx) => {
     // Deduct gold
-    const goldResult = await client.query(
-      'UPDATE guilds SET gold = gold - $2 WHERE id = $1 AND gold >= $2 RETURNING *',
-      [guildId, cost]
-    );
+    const [goldResult] = await tx`
+      UPDATE guilds SET gold = gold - ${cost} 
+      WHERE id = ${guildId} AND gold >= ${cost} 
+      RETURNING *
+    `;
     
-    if (!goldResult.rows[0]) {
+    if (!goldResult) {
       throw new Error('Insufficient gold');
     }
     
     // Insert or update the upgrade
-    const upgradeResult = await client.query(
-      `INSERT INTO guild_upgrades (guild_id, upgrade_id, level)
-       VALUES ($1, $2, 1)
-       ON CONFLICT (guild_id, upgrade_id) 
-       DO UPDATE SET level = guild_upgrades.level + 1, purchased_at = NOW()
-       RETURNING *`,
-      [guildId, upgradeId]
-    );
+    const [upgradeResult] = await tx`
+      INSERT INTO guild_upgrades (guild_id, upgrade_id, level)
+      VALUES (${guildId}, ${upgradeId}, 1)
+      ON CONFLICT (guild_id, upgrade_id) 
+      DO UPDATE SET level = guild_upgrades.level + 1, purchased_at = NOW()
+      RETURNING *
+    `;
     
-    await client.query('COMMIT');
-    return upgradeResult.rows[0];
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+    return upgradeResult;
+  });
 }
 
 /**
@@ -186,56 +168,44 @@ export function calculateMaxAffordable(upgrade, currentLevel, availableGold) {
  * @returns {Promise<Object>} The guild_upgrade record
  */
 export async function purchaseUpgradeMultiple(guildId, upgradeId, levelsToBuy, totalCost) {
-  const client = await getClient();
-  
-  try {
-    await client.query('BEGIN');
-    
+  return await sql.begin(async (tx) => {
     // Deduct gold and track spending stats
-    const goldResult = await client.query(
-      `UPDATE guilds 
-       SET gold = gold - $2,
-           lifetime_gold_spent = lifetime_gold_spent + $2,
-           lifetime_upgrades_purchased = lifetime_upgrades_purchased + $3,
-           peak_gold_balance = GREATEST(peak_gold_balance, gold - $2)
-       WHERE id = $1 AND gold >= $2 
-       RETURNING *`,
-      [guildId, totalCost, levelsToBuy]
-    );
+    const [goldResult] = await tx`
+      UPDATE guilds 
+      SET gold = gold - ${totalCost},
+          lifetime_gold_spent = lifetime_gold_spent + ${totalCost},
+          lifetime_upgrades_purchased = lifetime_upgrades_purchased + ${levelsToBuy},
+          peak_gold_balance = GREATEST(peak_gold_balance, gold - ${totalCost})
+      WHERE id = ${guildId} AND gold >= ${totalCost} 
+      RETURNING *
+    `;
     
-    if (!goldResult.rows[0]) {
+    if (!goldResult) {
       throw new Error('Insufficient gold');
     }
     
     // Get current level
-    const currentResult = await client.query(
-      'SELECT level FROM guild_upgrades WHERE guild_id = $1 AND upgrade_id = $2',
-      [guildId, upgradeId]
-    );
-    const currentLevel = currentResult.rows[0]?.level || 0;
+    const [currentResult] = await tx`
+      SELECT level FROM guild_upgrades 
+      WHERE guild_id = ${guildId} AND upgrade_id = ${upgradeId}
+    `;
+    const currentLevel = currentResult?.level || 0;
     const newLevel = currentLevel + levelsToBuy;
     
     // Insert or update the upgrade
-    const upgradeResult = await client.query(
-      `INSERT INTO guild_upgrades (guild_id, upgrade_id, level)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (guild_id, upgrade_id) 
-       DO UPDATE SET level = $3, purchased_at = NOW()
-       RETURNING *`,
-      [guildId, upgradeId, newLevel]
-    );
+    const [upgradeResult] = await tx`
+      INSERT INTO guild_upgrades (guild_id, upgrade_id, level)
+      VALUES (${guildId}, ${upgradeId}, ${newLevel})
+      ON CONFLICT (guild_id, upgrade_id) 
+      DO UPDATE SET level = ${newLevel}, purchased_at = NOW()
+      RETURNING *
+    `;
     
-    await client.query('COMMIT');
     return { 
-      ...upgradeResult.rows[0], 
-      remainingGold: goldResult.rows[0].gold 
+      ...upgradeResult, 
+      remainingGold: goldResult.gold 
     };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**
@@ -246,17 +216,16 @@ export async function purchaseUpgradeMultiple(guildId, upgradeId, levelsToBuy, t
  * @returns {Promise<Array>} Available upgrades with current levels
  */
 export async function getAvailableUpgrades(guildId, guildLevel, adventurerCount) {
-  const result = await query(
-    `SELECT u.*, COALESCE(gu.level, 0) as current_level
-     FROM upgrades u
-     LEFT JOIN guild_upgrades gu ON u.id = gu.upgrade_id AND gu.guild_id = $1
-     WHERE u.required_guild_level <= $2
-       AND u.required_adventurer_count <= $3
-       AND (u.required_upgrade_id IS NULL 
-            OR EXISTS (SELECT 1 FROM guild_upgrades WHERE guild_id = $1 AND upgrade_id = u.required_upgrade_id))
-       AND (u.max_level IS NULL OR COALESCE(gu.level, 0) < u.max_level)
-     ORDER BY u.category, u.required_guild_level, u.base_cost`,
-    [guildId, guildLevel, adventurerCount]
-  );
-  return result.rows;
+  const result = await sql`
+    SELECT u.*, COALESCE(gu.level, 0) as current_level
+    FROM upgrades u
+    LEFT JOIN guild_upgrades gu ON u.id = gu.upgrade_id AND gu.guild_id = ${guildId}
+    WHERE u.required_guild_level <= ${guildLevel}
+      AND u.required_adventurer_count <= ${adventurerCount}
+      AND (u.required_upgrade_id IS NULL 
+           OR EXISTS (SELECT 1 FROM guild_upgrades WHERE guild_id = ${guildId} AND upgrade_id = u.required_upgrade_id))
+      AND (u.max_level IS NULL OR COALESCE(gu.level, 0) < u.max_level)
+    ORDER BY u.category, u.required_guild_level, u.base_cost
+  `;
+  return result;
 }

@@ -1,12 +1,7 @@
 import 'dotenv/config';
-import pg from 'pg';
-import { DATABASE_URL } from '../config.js';
+import { SQL } from 'bun';
 
-const { Pool } = pg;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-});
+const db = new SQL(process.env.DATABASE_URL);
 
 const migrations = [
   {
@@ -179,7 +174,7 @@ async function migrate() {
 
   try {
     // Ensure migrations table exists
-    await pool.query(`
+    await db.unsafe(`
       CREATE TABLE IF NOT EXISTS migrations (
         name VARCHAR(128) PRIMARY KEY,
         applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -187,7 +182,7 @@ async function migrate() {
     `);
 
     // Get already applied migrations
-    const { rows: applied } = await pool.query('SELECT name FROM migrations');
+    const applied = await db`SELECT name FROM migrations`;
     const appliedNames = new Set(applied.map((r) => r.name));
 
     // Run pending migrations
@@ -198,8 +193,8 @@ async function migrate() {
       }
 
       console.log(`→ Running ${migration.name}...`);
-      await pool.query(migration.sql);
-      await pool.query('INSERT INTO migrations (name) VALUES ($1)', [migration.name]);
+      await db.unsafe(migration.sql);
+      await db`INSERT INTO migrations (name) VALUES (${migration.name})`;
       console.log(`✓ ${migration.name} applied successfully`);
     }
 
@@ -208,7 +203,7 @@ async function migrate() {
     console.error('Migration failed:', error.message);
     process.exit(1);
   } finally {
-    await pool.end();
+    await db.close();
   }
 }
 

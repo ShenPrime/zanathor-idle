@@ -1,4 +1,4 @@
-import { query, getClient } from './connection.js';
+import { sql } from './connection.js';
 import { PRESTIGE } from '../config.js';
 
 /**
@@ -6,10 +6,8 @@ import { PRESTIGE } from '../config.js';
  * @returns {Promise<Array>} All prestige upgrades
  */
 export async function getAllPrestigeUpgrades() {
-  const { rows } = await query(
-    'SELECT * FROM prestige_upgrades ORDER BY id'
-  );
-  return rows;
+  const result = await sql`SELECT * FROM prestige_upgrades ORDER BY id`;
+  return result;
 }
 
 /**
@@ -18,11 +16,8 @@ export async function getAllPrestigeUpgrades() {
  * @returns {Promise<Object|null>} The upgrade or null
  */
 export async function getPrestigeUpgradeById(upgradeId) {
-  const { rows } = await query(
-    'SELECT * FROM prestige_upgrades WHERE id = $1',
-    [upgradeId]
-  );
-  return rows[0] || null;
+  const [upgrade] = await sql`SELECT * FROM prestige_upgrades WHERE id = ${upgradeId}`;
+  return upgrade || null;
 }
 
 /**
@@ -31,14 +26,13 @@ export async function getPrestigeUpgradeById(upgradeId) {
  * @returns {Promise<Array>} Guild's prestige upgrades with details
  */
 export async function getGuildPrestigeUpgrades(guildId) {
-  const { rows } = await query(
-    `SELECT pu.*, gpu.level as current_level
-     FROM prestige_upgrades pu
-     LEFT JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id AND gpu.guild_id = $1
-     ORDER BY pu.id`,
-    [guildId]
-  );
-  return rows;
+  const result = await sql`
+    SELECT pu.*, gpu.level as current_level
+    FROM prestige_upgrades pu
+    LEFT JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id AND gpu.guild_id = ${guildId}
+    ORDER BY pu.id
+  `;
+  return result;
 }
 
 /**
@@ -47,14 +41,13 @@ export async function getGuildPrestigeUpgrades(guildId) {
  * @returns {Promise<Array>} Owned prestige upgrades
  */
 export async function getOwnedPrestigeUpgrades(guildId) {
-  const { rows } = await query(
-    `SELECT pu.*, gpu.level
-     FROM guild_prestige_upgrades gpu
-     JOIN prestige_upgrades pu ON gpu.prestige_upgrade_id = pu.id
-     WHERE gpu.guild_id = $1`,
-    [guildId]
-  );
-  return rows;
+  const result = await sql`
+    SELECT pu.*, gpu.level
+    FROM guild_prestige_upgrades gpu
+    JOIN prestige_upgrades pu ON gpu.prestige_upgrade_id = pu.id
+    WHERE gpu.guild_id = ${guildId}
+  `;
+  return result;
 }
 
 /**
@@ -64,11 +57,11 @@ export async function getOwnedPrestigeUpgrades(guildId) {
  * @returns {Promise<number>} Current level (0 if not purchased)
  */
 export async function getGuildPrestigeUpgradeLevel(guildId, upgradeId) {
-  const { rows } = await query(
-    'SELECT level FROM guild_prestige_upgrades WHERE guild_id = $1 AND prestige_upgrade_id = $2',
-    [guildId, upgradeId]
-  );
-  return rows[0]?.level || 0;
+  const [result] = await sql`
+    SELECT level FROM guild_prestige_upgrades 
+    WHERE guild_id = ${guildId} AND prestige_upgrade_id = ${upgradeId}
+  `;
+  return result?.level || 0;
 }
 
 /**
@@ -78,86 +71,67 @@ export async function getGuildPrestigeUpgradeLevel(guildId, upgradeId) {
  * @returns {Promise<Object>} Result with success status and new level
  */
 export async function purchasePrestigeUpgrade(guildId, upgradeId) {
-  const client = await getClient();
-  
   try {
-    await client.query('BEGIN');
-    
-    // Get the upgrade details
-    const { rows: [upgrade] } = await client.query(
-      'SELECT * FROM prestige_upgrades WHERE id = $1',
-      [upgradeId]
-    );
-    
-    if (!upgrade) {
-      throw new Error('Prestige upgrade not found');
-    }
-    
-    // Get current level
-    const { rows: [current] } = await client.query(
-      'SELECT level FROM guild_prestige_upgrades WHERE guild_id = $1 AND prestige_upgrade_id = $2',
-      [guildId, upgradeId]
-    );
-    
-    const currentLevel = current?.level || 0;
-    
-    // Check if already maxed
-    if (currentLevel >= upgrade.max_level) {
-      throw new Error('Upgrade already at max level');
-    }
-    
-    // Get cost for next level
-    const cost = upgrade.point_costs[currentLevel];
-    
-    // Get guild's prestige points
-    const { rows: [guild] } = await client.query(
-      'SELECT prestige_points FROM guilds WHERE id = $1',
-      [guildId]
-    );
-    
-    if (guild.prestige_points < cost) {
-      throw new Error(`Not enough prestige points (need ${cost}, have ${guild.prestige_points})`);
-    }
-    
-    // Deduct points
-    await client.query(
-      'UPDATE guilds SET prestige_points = prestige_points - $1 WHERE id = $2',
-      [cost, guildId]
-    );
-    
-    // Add or update the upgrade
-    if (currentLevel === 0) {
-      await client.query(
-        `INSERT INTO guild_prestige_upgrades (guild_id, prestige_upgrade_id, level)
-         VALUES ($1, $2, 1)`,
-        [guildId, upgradeId]
-      );
-    } else {
-      await client.query(
-        `UPDATE guild_prestige_upgrades 
-         SET level = level + 1, purchased_at = NOW()
-         WHERE guild_id = $1 AND prestige_upgrade_id = $2`,
-        [guildId, upgradeId]
-      );
-    }
-    
-    await client.query('COMMIT');
-    
-    return {
-      success: true,
-      newLevel: currentLevel + 1,
-      pointsSpent: cost,
-      upgradeName: upgrade.name,
-    };
-    
+    return await sql.begin(async (tx) => {
+      // Get the upgrade details
+      const [upgrade] = await tx`SELECT * FROM prestige_upgrades WHERE id = ${upgradeId}`;
+      
+      if (!upgrade) {
+        throw new Error('Prestige upgrade not found');
+      }
+      
+      // Get current level
+      const [current] = await tx`
+        SELECT level FROM guild_prestige_upgrades 
+        WHERE guild_id = ${guildId} AND prestige_upgrade_id = ${upgradeId}
+      `;
+      
+      const currentLevel = current?.level || 0;
+      
+      // Check if already maxed
+      if (currentLevel >= upgrade.max_level) {
+        throw new Error('Upgrade already at max level');
+      }
+      
+      // Get cost for next level
+      const cost = upgrade.point_costs[currentLevel];
+      
+      // Get guild's prestige points
+      const [guild] = await tx`SELECT prestige_points FROM guilds WHERE id = ${guildId}`;
+      
+      if (guild.prestige_points < cost) {
+        throw new Error(`Not enough prestige points (need ${cost}, have ${guild.prestige_points})`);
+      }
+      
+      // Deduct points
+      await tx`UPDATE guilds SET prestige_points = prestige_points - ${cost} WHERE id = ${guildId}`;
+      
+      // Add or update the upgrade
+      if (currentLevel === 0) {
+        await tx`
+          INSERT INTO guild_prestige_upgrades (guild_id, prestige_upgrade_id, level)
+          VALUES (${guildId}, ${upgradeId}, 1)
+        `;
+      } else {
+        await tx`
+          UPDATE guild_prestige_upgrades 
+          SET level = level + 1, purchased_at = NOW()
+          WHERE guild_id = ${guildId} AND prestige_upgrade_id = ${upgradeId}
+        `;
+      }
+      
+      return {
+        success: true,
+        newLevel: currentLevel + 1,
+        pointsSpent: cost,
+        upgradeName: upgrade.name,
+      };
+    });
   } catch (error) {
-    await client.query('ROLLBACK');
     return {
       success: false,
       error: error.message,
     };
-  } finally {
-    client.release();
   }
 }
 
@@ -216,93 +190,74 @@ export function calculatePrestigeRewards(guild) {
  * @returns {Promise<Object>} Result with new stats
  */
 export async function executePrestige(guildId, prestigeUpgrades = []) {
-  const client = await getClient();
-  
   try {
-    await client.query('BEGIN');
-    
-    // Get current guild data
-    const { rows: [guild] } = await client.query(
-      'SELECT * FROM guilds WHERE id = $1',
-      [guildId]
-    );
-    
-    if (!guild) {
-      throw new Error('Guild not found');
-    }
-    
-    // Check eligibility
-    const eligibility = canPrestige(guild);
-    if (!eligibility.eligible) {
-      throw new Error(`Must be level ${eligibility.requiredLevel} to prestige`);
-    }
-    
-    // Calculate rewards
-    const rewards = calculatePrestigeRewards(guild);
-    
-    // Calculate starting values from prestige upgrades
-    const startingValues = calculateStartingValues(prestigeUpgrades);
-    
-    // Calculate gold to keep (from Quick Start upgrade)
-    const goldKeepPercent = getPrestigeUpgradeEffect(prestigeUpgrades, 'gold_keep_percent');
-    const goldToKeep = Math.floor(guild.gold * goldKeepPercent);
-    
-    // Reset guild stats
-    await client.query(
-      `UPDATE guilds SET
-        level = 1,
-        xp = 0,
-        gold = $2,
-        adventurer_count = $3,
-        adventurer_capacity = $4,
-        last_collected_at = NOW(),
-        prestige_level = prestige_level + 1,
-        prestige_points = prestige_points + $5,
-        total_prestige_points_earned = total_prestige_points_earned + $5,
-        lifetime_prestiges = lifetime_prestiges + 1
-       WHERE id = $1`,
-      [
-        guildId,
-        startingValues.gold + goldToKeep,
-        startingValues.adventurers,
-        startingValues.capacity,
-        rewards.totalPoints,
-      ]
-    );
-    
-    // Clear all regular upgrades
-    await client.query(
-      'DELETE FROM guild_upgrades WHERE guild_id = $1',
-      [guildId]
-    );
-    
-    // Get updated guild before committing (still in transaction)
-    const { rows: [updatedGuild] } = await client.query(
-      'SELECT * FROM guilds WHERE id = $1',
-      [guildId]
-    );
-    
-    await client.query('COMMIT');
-    
-    return {
-      success: true,
-      pointsEarned: rewards.totalPoints,
-      newPrestigeLevel: rewards.newPrestigeLevel,
-      startingGold: startingValues.gold + goldToKeep,
-      startingAdventurers: startingValues.adventurers,
-      startingCapacity: startingValues.capacity,
-      goldKept: goldToKeep,
-      guild: updatedGuild,
-    };
-    
+    return await sql.begin(async (tx) => {
+      // Get current guild data
+      const [guild] = await tx`SELECT * FROM guilds WHERE id = ${guildId}`;
+      
+      if (!guild) {
+        throw new Error('Guild not found');
+      }
+      
+      // Check eligibility
+      const eligibility = canPrestige(guild);
+      if (!eligibility.eligible) {
+        throw new Error(`Must be level ${eligibility.requiredLevel} to prestige`);
+      }
+      
+      // Calculate rewards
+      const rewards = calculatePrestigeRewards(guild);
+      
+      // Calculate starting values from prestige upgrades
+      const startingValues = calculateStartingValues(prestigeUpgrades);
+      
+      // Calculate gold to keep (from Quick Start upgrade)
+      const goldKeepPercent = getPrestigeUpgradeEffect(prestigeUpgrades, 'gold_keep_percent');
+      const goldToKeep = Math.floor(guild.gold * goldKeepPercent);
+      
+      const startingGold = startingValues.gold + goldToKeep;
+      const startingAdventurers = startingValues.adventurers;
+      const startingCapacity = startingValues.capacity;
+      const totalPoints = rewards.totalPoints;
+      
+      // Reset guild stats
+      await tx`
+        UPDATE guilds SET
+          level = 1,
+          xp = 0,
+          gold = ${startingGold},
+          adventurer_count = ${startingAdventurers},
+          adventurer_capacity = ${startingCapacity},
+          last_collected_at = NOW(),
+          prestige_level = prestige_level + 1,
+          prestige_points = prestige_points + ${totalPoints},
+          total_prestige_points_earned = total_prestige_points_earned + ${totalPoints},
+          lifetime_prestiges = lifetime_prestiges + 1
+        WHERE id = ${guildId}
+      `;
+      
+      // Clear all regular upgrades
+      await tx`DELETE FROM guild_upgrades WHERE guild_id = ${guildId}`;
+      
+      // Get updated guild before committing (still in transaction)
+      const [updatedGuild] = await tx`SELECT * FROM guilds WHERE id = ${guildId}`;
+      
+      return {
+        success: true,
+        pointsEarned: rewards.totalPoints,
+        newPrestigeLevel: rewards.newPrestigeLevel,
+        startingGold: startingValues.gold + goldToKeep,
+        startingAdventurers: startingValues.adventurers,
+        startingCapacity: startingValues.capacity,
+        goldKept: goldToKeep,
+        guild: updatedGuild,
+      };
+    });
   } catch (error) {
-    await client.query('ROLLBACK');
     return {
       success: false,
       error: error.message,
     };
-  } finally {
-    client.release();
   }
 }
 
@@ -377,14 +332,13 @@ export function getPrestigeUpgradeEffect(prestigeUpgrades, effectType) {
  * @returns {Promise<boolean>} New auto-prestige status
  */
 export async function toggleAutoPrestige(guildId) {
-  const { rows } = await query(
-    `UPDATE guilds 
-     SET auto_prestige_enabled = NOT auto_prestige_enabled 
-     WHERE id = $1 
-     RETURNING auto_prestige_enabled`,
-    [guildId]
-  );
-  return rows[0]?.auto_prestige_enabled || false;
+  const [result] = await sql`
+    UPDATE guilds 
+    SET auto_prestige_enabled = NOT auto_prestige_enabled 
+    WHERE id = ${guildId} 
+    RETURNING auto_prestige_enabled
+  `;
+  return result?.auto_prestige_enabled || false;
 }
 
 /**

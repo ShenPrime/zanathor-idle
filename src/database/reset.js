@@ -1,12 +1,7 @@
 import 'dotenv/config';
-import pg from 'pg';
-import { DATABASE_URL } from '../config.js';
+import { SQL } from 'bun';
 
-const { Pool } = pg;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-});
+const db = new SQL(process.env.DATABASE_URL);
 
 async function reset() {
   console.log('=================================');
@@ -19,28 +14,28 @@ async function reset() {
     // Drop all tables in correct order (respecting foreign keys)
     console.log('Dropping tables...');
     
-    await pool.query('DROP TABLE IF EXISTS guild_upgrades CASCADE');
+    await db.unsafe('DROP TABLE IF EXISTS guild_upgrades CASCADE');
     console.log('  - Dropped guild_upgrades');
     
-    await pool.query('DROP TABLE IF EXISTS guilds CASCADE');
+    await db.unsafe('DROP TABLE IF EXISTS guilds CASCADE');
     console.log('  - Dropped guilds');
     
-    await pool.query('DROP TABLE IF EXISTS upgrades CASCADE');
+    await db.unsafe('DROP TABLE IF EXISTS upgrades CASCADE');
     console.log('  - Dropped upgrades');
     
-    await pool.query('DROP TABLE IF EXISTS migrations CASCADE');
+    await db.unsafe('DROP TABLE IF EXISTS migrations CASCADE');
     console.log('  - Dropped migrations');
 
     console.log('\nAll tables dropped successfully!\n');
     console.log('Now run the following commands to rebuild:');
-    console.log('  npm run migrate');
-    console.log('  npm run seed\n');
+    console.log('  bun run migrate');
+    console.log('  bun run seed\n');
     
   } catch (error) {
     console.error('Reset failed:', error);
     process.exit(1);
   } finally {
-    await pool.end();
+    await db.close();
   }
 }
 

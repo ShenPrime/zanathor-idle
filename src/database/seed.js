@@ -1,12 +1,7 @@
 import 'dotenv/config';
-import pg from 'pg';
-import { DATABASE_URL } from '../config.js';
+import { SQL } from 'bun';
 
-const { Pool } = pg;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-});
+const db = new SQL(process.env.DATABASE_URL);
 
 // ============================================================================
 // UPGRADE DEFINITIONS (52 total)
@@ -760,32 +755,20 @@ async function seed() {
     // Seed regular upgrades
     console.log('=== Regular Upgrades ===');
     for (const upgrade of upgrades) {
-      await pool.query(
-        `INSERT INTO upgrades (name, description, category, base_cost, cost_multiplier, effect_type, effect_value, max_level, required_guild_level, required_adventurer_count)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (name) DO UPDATE SET
-           description = EXCLUDED.description,
-           category = EXCLUDED.category,
-           base_cost = EXCLUDED.base_cost,
-           cost_multiplier = EXCLUDED.cost_multiplier,
-           effect_type = EXCLUDED.effect_type,
-           effect_value = EXCLUDED.effect_value,
-           max_level = EXCLUDED.max_level,
-           required_guild_level = EXCLUDED.required_guild_level,
-           required_adventurer_count = EXCLUDED.required_adventurer_count`,
-        [
-          upgrade.name,
-          upgrade.description,
-          upgrade.category,
-          upgrade.base_cost,
-          upgrade.cost_multiplier,
-          upgrade.effect_type,
-          upgrade.effect_value,
-          upgrade.max_level,
-          upgrade.required_guild_level,
-          upgrade.required_adventurer_count,
-        ]
-      );
+      await db`
+        INSERT INTO upgrades (name, description, category, base_cost, cost_multiplier, effect_type, effect_value, max_level, required_guild_level, required_adventurer_count)
+        VALUES (${upgrade.name}, ${upgrade.description}, ${upgrade.category}, ${upgrade.base_cost}, ${upgrade.cost_multiplier}, ${upgrade.effect_type}, ${upgrade.effect_value}, ${upgrade.max_level}, ${upgrade.required_guild_level}, ${upgrade.required_adventurer_count})
+        ON CONFLICT (name) DO UPDATE SET
+          description = EXCLUDED.description,
+          category = EXCLUDED.category,
+          base_cost = EXCLUDED.base_cost,
+          cost_multiplier = EXCLUDED.cost_multiplier,
+          effect_type = EXCLUDED.effect_type,
+          effect_value = EXCLUDED.effect_value,
+          max_level = EXCLUDED.max_level,
+          required_guild_level = EXCLUDED.required_guild_level,
+          required_adventurer_count = EXCLUDED.required_adventurer_count
+      `;
       console.log(`  + ${upgrade.name} (${upgrade.category}, Lv${upgrade.required_guild_level})`);
     }
     console.log(`\nSeeded ${upgrades.length} regular upgrades successfully!\n`);
@@ -793,24 +776,16 @@ async function seed() {
     // Seed prestige upgrades
     console.log('=== Prestige Upgrades ===');
     for (const upgrade of prestigeUpgrades) {
-      await pool.query(
-        `INSERT INTO prestige_upgrades (name, description, effect_type, effect_value, max_level, point_costs)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (name) DO UPDATE SET
-           description = EXCLUDED.description,
-           effect_type = EXCLUDED.effect_type,
-           effect_value = EXCLUDED.effect_value,
-           max_level = EXCLUDED.max_level,
-           point_costs = EXCLUDED.point_costs`,
-        [
-          upgrade.name,
-          upgrade.description,
-          upgrade.effect_type,
-          upgrade.effect_value,
-          upgrade.max_level,
-          upgrade.point_costs,
-        ]
-      );
+      await db`
+        INSERT INTO prestige_upgrades (name, description, effect_type, effect_value, max_level, point_costs)
+        VALUES (${upgrade.name}, ${upgrade.description}, ${upgrade.effect_type}, ${upgrade.effect_value}, ${upgrade.max_level}, ${upgrade.point_costs})
+        ON CONFLICT (name) DO UPDATE SET
+          description = EXCLUDED.description,
+          effect_type = EXCLUDED.effect_type,
+          effect_value = EXCLUDED.effect_value,
+          max_level = EXCLUDED.max_level,
+          point_costs = EXCLUDED.point_costs
+      `;
       const totalCost = upgrade.point_costs.reduce((a, b) => a + b, 0);
       console.log(`  + ${upgrade.name} (${upgrade.max_level} levels, ${totalCost} points total)`);
     }
@@ -820,7 +795,7 @@ async function seed() {
     console.error('Seeding failed:', error.message);
     process.exit(1);
   } finally {
-    await pool.end();
+    await db.close();
   }
 }
 
