@@ -7,7 +7,7 @@ import {
   ComponentType,
   MessageFlags,
 } from 'discord.js';
-import { getGuildByDiscordId, addResources, incrementStats, updatePeakGold } from '../database/guilds.js';
+import { getGuildByDiscordId, flushGrindData, incrementStats } from '../database/guilds.js';
 import { getGuildUpgrades } from '../database/upgrades.js';
 import { calculateUpgradeBonuses } from '../game/idle.js';
 import { checkAndApplyLevelUp } from '../game/leveling.js';
@@ -199,17 +199,18 @@ async function handleGrindClick(interaction, odId) {
     flushSession(odId, false);
   }, FLUSH_DELAY_MS);
   
-  // Update the embed in place
+  // Update the embed in place (fire-and-forget for faster response)
   const embed = createGrindEmbed(session);
   
-  try {
-    await interaction.update({
-      embeds: [embed],
-      components: [createGrindButton()],
-    });
-  } catch (error) {
-    console.error('Failed to update grind interaction:', error.message);
-  }
+  interaction.update({
+    embeds: [embed],
+    components: [createGrindButton()],
+  }).catch(error => {
+    // Only log if it's not a known "interaction expired" error
+    if (error.code !== 10062 && error.code !== 40060) {
+      console.error('Failed to update grind interaction:', error.message);
+    }
+  });
 }
 
 /**
@@ -242,17 +243,8 @@ export async function flushSession(odId, final = false) {
   }
   
   try {
-    // Write to database
-    const updatedGuild = await addResources(session.guildId, goldToFlush, xpToFlush);
-    
-    // Track grind stats
-    await incrementStats(session.guildId, {
-      lifetime_grind_gold: goldToFlush,
-      lifetime_grind_clicks: clicksToFlush,
-    });
-    
-    // Update peak gold
-    await updatePeakGold(session.guildId, updatedGuild.gold);
+    // Write to database in a single combined operation
+    const updatedGuild = await flushGrindData(session.guildId, goldToFlush, xpToFlush, clicksToFlush);
     
     // Update flushed tracking
     session.flushedGold = session.sessionGold;
@@ -265,15 +257,11 @@ export async function flushSession(odId, final = false) {
     if (levelResult.leveledUp) {
       session.baseLevel = levelResult.newLevel;
       
-      // Update the embed to show level-up
+      // Update the embed to show level-up (only case where we need to update)
       if (session.updateEmbed) {
         const embed = createGrindEmbed(session, final, levelResult);
         await session.updateEmbed(embed, final);
       }
-    } else if (!final && session.updateEmbed) {
-      // Just update to remove any "pending" indication if we had one
-      const embed = createGrindEmbed(session);
-      await session.updateEmbed(embed);
     }
     
     return {

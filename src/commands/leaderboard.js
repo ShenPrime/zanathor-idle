@@ -115,12 +115,12 @@ async function showLeaderboard(interaction, categoryKey, isUpdate = false) {
   if (isUpdate) {
     await interaction.update({
       embeds: [embed],
-      components: [buttons],
+      components: buttons,
     });
   } else {
     await interaction.reply({
       embeds: [embed],
-      components: [buttons],
+      components: buttons,
     });
   }
 }
@@ -203,10 +203,9 @@ function buildLeaderboardEmbed(category, categoryKey, topGuilds, playerGuild, pl
 
 /**
  * Build the category navigation buttons
+ * Discord limits action rows to 5 buttons max, so we split into multiple rows
  */
 function buildCategoryButtons(activeCategory) {
-  const row = new ActionRowBuilder();
-  
   const buttonLabels = {
     gold: 'Gold',
     level: 'Level',
@@ -216,7 +215,11 @@ function buildCategoryButtons(activeCategory) {
     prestige_level: 'Prestige',
   };
   
-  for (const key of CATEGORY_ORDER) {
+  const rows = [];
+  let currentRow = new ActionRowBuilder();
+  
+  for (let i = 0; i < CATEGORY_ORDER.length; i++) {
+    const key = CATEGORY_ORDER[i];
     const category = CATEGORIES[key];
     const isActive = key === activeCategory;
     
@@ -226,10 +229,21 @@ function buildCategoryButtons(activeCategory) {
       .setEmoji(category.emoji)
       .setStyle(isActive ? ButtonStyle.Primary : ButtonStyle.Secondary);
     
-    row.addComponents(button);
+    currentRow.addComponents(button);
+    
+    // Discord allows max 5 buttons per row
+    if ((i + 1) % 5 === 0 && i < CATEGORY_ORDER.length - 1) {
+      rows.push(currentRow);
+      currentRow = new ActionRowBuilder();
+    }
   }
   
-  return row;
+  // Add the last row if it has any buttons
+  if (currentRow.components.length > 0) {
+    rows.push(currentRow);
+  }
+  
+  return rows;
 }
 
 /**

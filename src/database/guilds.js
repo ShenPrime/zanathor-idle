@@ -282,3 +282,27 @@ export async function updateGuildName(id, name) {
   );
   return result.rows[0];
 }
+
+/**
+ * Flush grind session data to database in a single operation
+ * Combines addResources, incrementStats, and updatePeakGold into one query
+ * @param {number} id - Guild ID
+ * @param {number} goldToAdd - Gold to add
+ * @param {number} xpToAdd - XP to add
+ * @param {number} clicksToAdd - Clicks to add to lifetime stats
+ * @returns {Promise<Object>} Updated guild
+ */
+export async function flushGrindData(id, goldToAdd, xpToAdd, clicksToAdd) {
+  const result = await query(
+    `UPDATE guilds 
+     SET gold = gold + $2,
+         xp = xp + $3,
+         lifetime_grind_gold = lifetime_grind_gold + $2,
+         lifetime_grind_clicks = lifetime_grind_clicks + $4,
+         peak_gold_balance = GREATEST(peak_gold_balance, gold + $2)
+     WHERE id = $1
+     RETURNING *`,
+    [id, goldToAdd, xpToAdd, clicksToAdd]
+  );
+  return result.rows[0];
+}
