@@ -167,6 +167,35 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_guilds_prestige ON guilds(prestige_level DESC, total_prestige_points_earned DESC);
     `,
   },
+  {
+    name: '007_performance_indexes',
+    sql: `
+      -- Composite index for battle target cooldown check
+      -- Speeds up: WHERE attacker_id = X AND defender_id = Y ORDER BY created_at DESC
+      CREATE INDEX IF NOT EXISTS idx_battles_attacker_defender_created 
+        ON battles(attacker_id, defender_id, created_at DESC);
+
+      -- Functional index for case-insensitive upgrade name lookups
+      -- Speeds up: WHERE LOWER(name) = LOWER(X) and WHERE LOWER(name) = ANY(...)
+      CREATE INDEX IF NOT EXISTS idx_upgrades_name_lower ON upgrades(LOWER(name));
+
+      -- Index for reminder eligibility queries
+      -- Speeds up: WHERE dm_reminders_enabled = TRUE AND last_reminder_at < X
+      CREATE INDEX IF NOT EXISTS idx_notification_settings_reminder 
+        ON notification_settings(dm_reminders_enabled, last_reminder_at) 
+        WHERE dm_reminders_enabled = TRUE;
+
+      -- Index for available upgrades query
+      -- Speeds up: WHERE required_guild_level <= X AND required_adventurer_count <= Y
+      CREATE INDEX IF NOT EXISTS idx_upgrades_requirements 
+        ON upgrades(required_guild_level, required_adventurer_count);
+
+      -- Index for leaderboard queries on lifetime stats
+      CREATE INDEX IF NOT EXISTS idx_guilds_lifetime_gold ON guilds(lifetime_gold_earned DESC);
+      CREATE INDEX IF NOT EXISTS idx_guilds_battles_won ON guilds(lifetime_battles_won DESC);
+      CREATE INDEX IF NOT EXISTS idx_guilds_adventurers ON guilds(adventurer_count DESC);
+    `,
+  },
 ];
 
 async function migrate() {

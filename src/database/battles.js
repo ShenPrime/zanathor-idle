@@ -269,12 +269,73 @@ export async function checkTargetCooldown(attackerId, defenderId) {
 
 /**
  * Get a random guild to battle (excluding the attacker)
+ * Uses efficient random selection with OFFSET instead of ORDER BY RANDOM()
  * @param {number} attackerId - Attacker's guild ID
  * @returns {Promise<Object|null>} Random guild or null
  */
 export async function getRandomTarget(attackerId) {
-  const [guild] = await sql`SELECT * FROM guilds WHERE id != ${attackerId} ORDER BY RANDOM() LIMIT 1`;
+  // First get the count of eligible guilds (fast with index)
+  const [countResult] = await sql`SELECT COUNT(*)::int as count FROM guilds WHERE id != ${attackerId}`;
+  const count = countResult?.count || 0;
+  
+  if (count === 0) return null;
+  
+  // Pick a random offset and fetch that single row
+  const randomOffset = Math.floor(Math.random() * count);
+  const [guild] = await sql`SELECT * FROM guilds WHERE id != ${attackerId} LIMIT 1 OFFSET ${randomOffset}`;
   return guild || null;
+}
+
+/**
+ * Get a random guild to battle with full upgrade data (excluding the attacker)
+ * Combines getRandomTarget + getGuildWithData into fewer queries
+ * @param {number} attackerId - Attacker's guild ID
+ * @returns {Promise<{guild: Object|null, upgrades: Array, prestigeUpgrades: Array}>}
+ */
+export async function getRandomTargetWithData(attackerId) {
+  // First get the count of eligible guilds (fast with index)
+  const [countResult] = await sql`SELECT COUNT(*)::int as count FROM guilds WHERE id != ${attackerId}`;
+  const count = countResult?.count || 0;
+  
+  if (count === 0) return { guild: null, upgrades: [], prestigeUpgrades: [] };
+  
+  // Pick a random offset and fetch with full data using JSON aggregation
+  const randomOffset = Math.floor(Math.random() * count);
+  const [result] = await sql`
+    SELECT 
+      g.*,
+      COALESCE(
+        (SELECT json_agg(row_to_json(u))
+         FROM (
+           SELECT gu.*, up.name, up.description, up.category, up.effect_type, up.effect_value, up.max_level
+           FROM guild_upgrades gu
+           JOIN upgrades up ON gu.upgrade_id = up.id
+           WHERE gu.guild_id = g.id
+         ) u
+        ), '[]'::json
+      ) as upgrades,
+      COALESCE(
+        (SELECT json_agg(row_to_json(p))
+         FROM (
+           SELECT pu.*, gpu.level
+           FROM prestige_upgrades pu
+           JOIN guild_prestige_upgrades gpu ON pu.id = gpu.prestige_upgrade_id
+           WHERE gpu.guild_id = g.id
+         ) p
+        ), '[]'::json
+      ) as prestige_upgrades
+    FROM guilds g
+    WHERE g.id != ${attackerId}
+    LIMIT 1 OFFSET ${randomOffset}
+  `;
+  
+  if (!result) return { guild: null, upgrades: [], prestigeUpgrades: [] };
+  
+  const upgrades = result.upgrades || [];
+  const prestigeUpgrades = result.prestige_upgrades || [];
+  const { upgrades: _, prestige_upgrades: __, ...guild } = result;
+  
+  return { guild, upgrades, prestigeUpgrades };
 }
 
 /**
@@ -319,6 +380,7 @@ export async function recordBattle({
 /**
  * Apply battle results to guilds (new system: winner takes bet from loser)
  * Uses a transaction to ensure atomic updates - either all succeed or all fail
+ * Optimized to use 2 UPDATE statements instead of 4
  * @param {number} winnerId - Winner's guild ID
  * @param {number} loserId - Loser's guild ID
  * @param {number} goldTransfer - Gold transferred from loser to winner
@@ -326,24 +388,21 @@ export async function recordBattle({
  */
 export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonus) {
   await sql.begin(async (tx) => {
-    // Winner gains gold and XP bonus
-    await tx`UPDATE guilds SET gold = gold + ${goldTransfer}, xp = xp + ${xpBonus} WHERE id = ${winnerId}`;
-    
-    // Loser loses gold (no XP loss in new system)
-    await tx`UPDATE guilds SET gold = GREATEST(0, gold - ${goldTransfer}) WHERE id = ${loserId}`;
-    
-    // Update lifetime stats for winner
+    // Winner: gains gold, XP, and update lifetime stats (1 query instead of 2)
     await tx`
       UPDATE guilds SET 
+        gold = gold + ${goldTransfer}, 
+        xp = xp + ${xpBonus},
         lifetime_battles_won = lifetime_battles_won + 1,
         lifetime_battle_gold_won = lifetime_battle_gold_won + ${goldTransfer},
         lifetime_battle_xp_won = lifetime_battle_xp_won + ${xpBonus}
       WHERE id = ${winnerId}
     `;
     
-    // Update lifetime stats for loser
+    // Loser: loses gold and update lifetime stats (1 query instead of 2)
     await tx`
       UPDATE guilds SET 
+        gold = GREATEST(0, gold - ${goldTransfer}),
         lifetime_battles_lost = lifetime_battles_lost + 1,
         lifetime_battle_gold_lost = lifetime_battle_gold_lost + ${goldTransfer}
       WHERE id = ${loserId}

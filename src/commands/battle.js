@@ -11,7 +11,7 @@ import {
   calculateFreeRevengeRewards,
   checkBattleCooldowns,
   checkTargetCooldown,
-  getRandomTarget,
+  getRandomTargetWithData,
   recordBattle,
   applyBattleResults,
   applyFreeRevengeResults,
@@ -105,20 +105,18 @@ export async function execute(interaction) {
   let defenderDiscordId;
   
   if (randomBattle) {
-    // For random battles, we need to get the guild first, then fetch its data
-    defenderGuild = await getRandomTarget(attackerGuild.id);
-    if (!defenderGuild) {
+    // Get random target with full data in one operation (avoids double-fetch)
+    const defenderData = await getRandomTargetWithData(attackerGuild.id);
+    if (!defenderData.guild) {
       return interaction.reply({
         embeds: [createErrorEmbed('No other guilds to battle! Invite some friends to play.')],
         flags: MessageFlags.Ephemeral,
       });
     }
-    defenderDiscordId = defenderGuild.discord_id;
-    // Fetch the full data for the random target
-    const defenderData = await getGuildWithData(defenderDiscordId);
     defenderGuild = defenderData.guild;
     defenderUpgrades = defenderData.upgrades;
     defenderPrestigeUpgrades = defenderData.prestigeUpgrades;
+    defenderDiscordId = defenderGuild.discord_id;
   } else {
     // Can't battle yourself
     if (targetUser.id === interaction.user.id) {
@@ -610,11 +608,24 @@ export async function handleCounterAttack(interaction) {
     });
   }
   
-  // Get counter-attacker's guild (was the defender) - combined query
-  const { guild: counterAttackerGuild } = await getGuildWithData(interaction.user.id);
+  // Fetch both guilds in parallel for faster response
+  const [counterAttackerData, defenderData] = await Promise.all([
+    getGuildWithData(interaction.user.id),
+    getGuildWithData(originalAttackerId),
+  ]);
+  
+  const { guild: counterAttackerGuild } = counterAttackerData;
   if (!counterAttackerGuild) {
     return interaction.reply({
       embeds: [createErrorEmbed('You don\'t have a guild yet! Use `/start` to found one.')],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  
+  const { guild: defenderGuild } = defenderData;
+  if (!defenderGuild) {
+    return interaction.reply({
+      embeds: [createErrorEmbed('The original attacker no longer has a guild!')],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -624,15 +635,6 @@ export async function handleCounterAttack(interaction) {
   if (!cooldownCheck.canBattle) {
     return interaction.reply({
       embeds: [createErrorEmbed(cooldownCheck.reason)],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  
-  // Get original attacker's guild (now the defender) - combined query
-  const { guild: defenderGuild } = await getGuildWithData(originalAttackerId);
-  if (!defenderGuild) {
-    return interaction.reply({
-      embeds: [createErrorEmbed('The original attacker no longer has a guild!')],
       flags: MessageFlags.Ephemeral,
     });
   }

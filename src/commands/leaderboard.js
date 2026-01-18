@@ -86,13 +86,15 @@ export async function execute(interaction) {
  */
 async function showLeaderboard(interaction, categoryKey, isUpdate = false) {
   const category = CATEGORIES[categoryKey];
-  const playerGuild = await getGuildByDiscordId(interaction.user.id);
   
-  // Get leaderboard data
-  const topGuilds = await getLeaderboard(category.field, 10);
-  const totalGuilds = await getTotalGuildCount();
+  // Run independent queries in parallel for faster response
+  const [playerGuild, topGuilds, totalGuilds] = await Promise.all([
+    getGuildByDiscordId(interaction.user.id),
+    getLeaderboard(category.field, 10),
+    getTotalGuildCount(),
+  ]);
   
-  // Get player's rank if they have a guild
+  // Get player's rank if they have a guild (depends on playerGuild result)
   let playerRank = null;
   if (playerGuild) {
     playerRank = await getPlayerRank(interaction.user.id, category.field);

@@ -119,6 +119,19 @@ function stopWatcher(userId) {
 }
 
 /**
+ * Stop all active watchers (for graceful shutdown)
+ */
+export function stopAllWatchers() {
+  const count = activeWatchers.size;
+  for (const [userId] of activeWatchers) {
+    stopWatcher(userId);
+  }
+  if (count > 0) {
+    console.log(`Stopped ${count} active watcher(s)`);
+  }
+}
+
+/**
  * Main execute function
  */
 export async function execute(interaction) {

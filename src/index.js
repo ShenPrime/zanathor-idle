@@ -30,6 +30,9 @@ import * as prestigeCommand from './commands/prestige.js';
 // Import jobs
 import { startReminderChecker, stopReminderChecker } from './jobs/reminderChecker.js';
 
+// Import cache
+import { initializeCache } from './database/cache.js';
+
 // Validate environment
 if (!BOT_TOKEN) {
   console.error('ERROR: DISCORD_TOKEN is not set in .env file');
@@ -593,6 +596,9 @@ process.on('SIGINT', async () => {
   // Stop the reminder checker
   stopReminderChecker();
   
+  // Stop all active watchers
+  watchCommand.stopAllWatchers();
+  
   // Flush all active grind sessions before shutting down
   console.log('Flushing active grind sessions...');
   await grindCommand.flushAllSessions();
@@ -615,6 +621,9 @@ async function main() {
     console.error('Failed to connect to database. Please check your DATABASE_URL in .env');
     process.exit(1);
   }
+
+  // Initialize static data cache
+  await initializeCache();
 
   // Deploy commands
   await deployCommands();

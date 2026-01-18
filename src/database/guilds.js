@@ -249,7 +249,8 @@ export async function getLeaderboard(field = 'gold', limit = 10) {
 }
 
 /**
- * Get a player's rank on the leaderboard
+ * Get a player's rank on the leaderboard using window function
+ * More efficient than correlated subquery for large tables
  * @param {string} discordId - Discord user ID
  * @param {string} field - Field to rank by
  * @returns {Promise<number>} Rank (1-based)
@@ -260,11 +261,13 @@ export async function getPlayerRank(discordId, field = 'gold') {
     field = 'gold';
   }
 
-  // Use sql.unsafe for complex dynamic query with validated field
+  // Use window function for O(n) ranking instead of O(n*n) correlated subquery
   const result = await sql.unsafe(
-    `SELECT COUNT(*) + 1 as rank
-     FROM guilds g1
-     WHERE g1.${field} > (SELECT ${field} FROM guilds WHERE discord_id = $1)`,
+    `SELECT rank FROM (
+       SELECT discord_id, RANK() OVER (ORDER BY ${field} DESC) as rank 
+       FROM guilds
+     ) ranked 
+     WHERE discord_id = $1`,
     [discordId]
   );
   return parseInt(result[0]?.rank || 1);

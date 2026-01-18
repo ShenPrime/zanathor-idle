@@ -12,9 +12,6 @@ import {
 } from 'discord.js';
 import { getGuildByDiscordId } from '../database/guilds.js';
 import {
-  getUpgradeByName,
-  getUpgradesByNames,
-  getGuildUpgradeLevel,
   getGuildUpgradeLevelsBatch,
   calculateUpgradeCost,
   calculateBulkPurchaseCost,
@@ -22,6 +19,7 @@ import {
   purchaseUpgradeMultiple,
   getAvailableUpgrades,
 } from '../database/upgrades.js';
+import { getCachedUpgradesByNames } from '../database/cache.js';
 import { createErrorEmbed, COLORS } from '../utils/embeds.js';
 import { formatNumber } from '../utils/format.js';
 
@@ -197,8 +195,8 @@ export async function handleSelectMenu(interaction) {
   // Get guild to show costs
   const guild = await getGuildByDiscordId(interaction.user.id);
   
-  // Batch fetch all upgrades and their levels (2 queries instead of 2N)
-  const upgradeMap = await getUpgradesByNames(selectedUpgrades);
+  // Get upgrades from cache (0 queries) and batch fetch levels (1 query)
+  const upgradeMap = getCachedUpgradesByNames(selectedUpgrades);
   const upgradeIds = Array.from(upgradeMap.values()).map(u => u.id);
   const levelMap = await getGuildUpgradeLevelsBatch(guild.id, upgradeIds);
   
@@ -228,18 +226,20 @@ export async function handleSelectMenu(interaction) {
  * Handle modal submission - process purchases
  */
 export async function handleModal(interaction) {
+  // Defer reply immediately to prevent timeout on slow purchase operations
+  await interaction.deferReply({ ephemeral: true });
+  
   const upgradeNames = interaction.customId.split(':')[1].split(',');
   const guild = await getGuildByDiscordId(interaction.user.id);
   
   if (!guild) {
-    return interaction.reply({
+    return interaction.editReply({
       embeds: [createErrorEmbed('Your guild was not found. Please try again.')],
-      flags: MessageFlags.Ephemeral,
     });
   }
   
-  // Batch fetch all upgrades and their current levels (2 queries instead of 2N)
-  const upgradeMap = await getUpgradesByNames(upgradeNames);
+  // Get upgrades from cache (0 queries) and batch fetch levels (1 query)
+  const upgradeMap = getCachedUpgradesByNames(upgradeNames);
   const upgradeIds = Array.from(upgradeMap.values()).map(u => u.id);
   const levelMap = await getGuildUpgradeLevelsBatch(guild.id, upgradeIds);
   
@@ -362,10 +362,9 @@ export async function handleModal(interaction) {
       .setStyle(ButtonStyle.Primary)
   );
   
-  await interaction.reply({
+  await interaction.editReply({
     embeds: [embed],
     components: [buyAgainRow],
-    ephemeral: true,
   });
 }
 

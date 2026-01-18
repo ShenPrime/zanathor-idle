@@ -10,7 +10,7 @@ import {
   TextInputStyle,
   MessageFlags,
 } from 'discord.js';
-import { getGuildByDiscordId } from '../database/guilds.js';
+import { getGuildByDiscordId, getGuildWithData } from '../database/guilds.js';
 import {
   getGuildPrestigeUpgrades,
   getOwnedPrestigeUpgrades,
@@ -304,7 +304,8 @@ export async function handlePrestigeNow(interaction) {
  * Handle prestige confirmation modal submission
  */
 export async function handlePrestigeConfirmModal(interaction) {
-  const guild = await getGuildByDiscordId(interaction.user.id);
+  // Get guild with prestige upgrades in one query (instead of 2)
+  const { guild, prestigeUpgrades } = await getGuildWithData(interaction.user.id);
   if (!guild) return;
 
   const confirmName = interaction.fields.getTextInputValue('confirm_name');
@@ -316,10 +317,7 @@ export async function handlePrestigeConfirmModal(interaction) {
     });
   }
 
-  // Get prestige upgrades for starting values calculation
-  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
-
-  // Execute prestige
+  // Execute prestige using pre-loaded prestige upgrades
   const result = await executePrestige(guild.id, prestigeUpgrades);
 
   if (!result.success) {
@@ -384,10 +382,10 @@ export async function handleShopView(interaction) {
  * Handle back to status button
  */
 export async function handleBackToStatus(interaction) {
-  const guild = await getGuildByDiscordId(interaction.user.id);
+  // Get guild with prestige upgrades in one query (instead of 2)
+  const { guild, prestigeUpgrades } = await getGuildWithData(interaction.user.id);
   if (!guild) return;
 
-  const prestigeUpgrades = await getOwnedPrestigeUpgrades(guild.id);
   const prestigeBonuses = calculatePrestigeBonuses(guild, prestigeUpgrades);
   const eligibility = canPrestige(guild);
   const rewards = calculatePrestigeRewards(guild);

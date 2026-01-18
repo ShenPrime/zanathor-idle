@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { getGuildsEligibleForReminder, updateLastReminderTime, recordDmFailure } from '../database/notifications.js';
-import { calculateIdleEarnings } from '../game/idle.js';
+import { calculateIdleEarningsWithData } from '../game/idle.js';
 import { formatNumber } from '../utils/format.js';
 import { COLORS } from '../utils/embeds.js';
 
@@ -38,7 +38,7 @@ function buildReminderEmbed(guild, pendingGold, pendingXp) {
 /**
  * Check a single guild and send reminder if needed
  * @param {Object} client - Discord client
- * @param {Object} guild - Guild data from database
+ * @param {Object} guild - Guild data from database (includes upgrades and prestige_upgrades)
  * @returns {Promise<boolean>} Whether a reminder was sent
  */
 async function checkAndRemindGuild(client, guild) {
@@ -48,8 +48,12 @@ async function checkAndRemindGuild(client, guild) {
       return false;
     }
     
-    // Calculate pending earnings
-    const earnings = await calculateIdleEarnings(guild);
+    // Calculate pending earnings using pre-loaded upgrade data (no DB queries!)
+    const earnings = calculateIdleEarningsWithData(
+      guild, 
+      guild.upgrades || [], 
+      guild.prestige_upgrades || []
+    );
     
     // Check if pending gold meets threshold (50% of current balance)
     const threshold = guild.gold * REMINDER_THRESHOLD_PERCENT;

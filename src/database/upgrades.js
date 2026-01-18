@@ -49,10 +49,12 @@ export async function getUpgradeByName(name) {
  * @returns {Promise<Map<string, Object>>} Map of lowercase name -> upgrade
  */
 export async function getUpgradesByNames(names) {
-  if (names.length === 0) return new Map();
+  // Normalize input to always be an array
+  const nameArray = Array.isArray(names) ? names : [names];
+  if (nameArray.length === 0) return new Map();
   
   // Normalize names to lowercase for comparison
-  const lowerNames = names.map(n => n.toLowerCase());
+  const lowerNames = nameArray.map(n => n.toLowerCase());
   
   const upgrades = await sql`
     SELECT * FROM upgrades 
