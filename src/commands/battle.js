@@ -254,8 +254,19 @@ async function executeBattle(interaction, attackerGuild, defenderGuild, defender
     attackerLost,
   });
   
-  // Apply battle results
-  await applyBattleResults(winnerId, loserId, goldTransfer, xpBonus);
+  // Apply battle results (wrapped in transaction for atomicity)
+  try {
+    await applyBattleResults(winnerId, loserId, goldTransfer, xpBonus);
+  } catch (error) {
+    console.error('Battle result application failed:', error);
+    const errorEmbed = createErrorEmbed('Battle completed but failed to transfer gold. Please contact an admin.');
+    if (isConsent) {
+      await interaction.update({ embeds: [errorEmbed], components: [] });
+    } else {
+      await interaction.reply({ embeds: [errorEmbed] });
+    }
+    return;
+  }
   
   // Record the battle
   await recordBattle({
@@ -784,8 +795,15 @@ async function executeCounterAttack(interaction, betAmount, originalAttackerId, 
     attackerLost,
   });
   
-  // Apply battle results
-  await applyBattleResults(winnerId, loserId, goldTransfer, xpBonus);
+  // Apply battle results (wrapped in transaction for atomicity)
+  try {
+    await applyBattleResults(winnerId, loserId, goldTransfer, xpBonus);
+  } catch (error) {
+    console.error('Counter-attack result application failed:', error);
+    return interaction.reply({
+      embeds: [createErrorEmbed('Battle completed but failed to transfer gold. Please contact an admin.')],
+    });
+  }
   
   // Record the battle
   await recordBattle({
@@ -964,8 +982,15 @@ export async function handleFreeRevenge(interaction) {
   // Calculate free revenge rewards (1-2% of original attacker's gold if defender wins)
   const { goldReward, xpBonus } = calculateFreeRevengeRewards(defenderGuild);
   
-  // Apply results
-  await applyFreeRevengeResults(counterAttackerGuild.id, defenderGuild.id, defenderWon, goldReward, xpBonus);
+  // Apply results (wrapped in transaction for atomicity)
+  try {
+    await applyFreeRevengeResults(counterAttackerGuild.id, defenderGuild.id, defenderWon, goldReward, xpBonus);
+  } catch (error) {
+    console.error('Free revenge result application failed:', error);
+    return interaction.reply({
+      embeds: [createErrorEmbed('Free revenge completed but failed to transfer gold. Please contact an admin.')],
+    });
+  }
   
   // Record the battle (with 0 bet)
   await recordBattle({

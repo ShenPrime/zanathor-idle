@@ -1,4 +1,4 @@
-import { query } from './connection.js';
+import { query, getClient } from './connection.js';
 import { getRankForLevel } from '../config.js';
 import { getGuildUpgrades } from './upgrades.js';
 import { getOwnedPrestigeUpgrades } from './prestige.js';
@@ -317,48 +317,64 @@ export async function recordBattle({
 
 /**
  * Apply battle results to guilds (new system: winner takes bet from loser)
+ * Uses a transaction to ensure atomic updates - either all succeed or all fail
  * @param {number} winnerId - Winner's guild ID
  * @param {number} loserId - Loser's guild ID
  * @param {number} goldTransfer - Gold transferred from loser to winner
  * @param {number} xpBonus - XP bonus for winner (not taken from loser)
  */
 export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonus) {
-  // Winner gains gold and XP bonus
-  await query(
-    `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
-    [winnerId, goldTransfer, xpBonus]
-  );
+  const client = await getClient();
   
-  // Loser loses gold (no XP loss in new system)
-  await query(
-    `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
-    [loserId, goldTransfer]
-  );
-  
-  // Update lifetime stats for winner
-  await query(
-    `UPDATE guilds SET 
-       lifetime_battles_won = lifetime_battles_won + 1,
-       lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
-       lifetime_battle_xp_won = lifetime_battle_xp_won + $3
-     WHERE id = $1`,
-    [winnerId, goldTransfer, xpBonus]
-  );
-  
-  // Update lifetime stats for loser
-  await query(
-    `UPDATE guilds SET 
-       lifetime_battles_lost = lifetime_battles_lost + 1,
-       lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
-     WHERE id = $1`,
-    [loserId, goldTransfer]
-  );
+  try {
+    await client.query('BEGIN');
+    
+    // Winner gains gold and XP bonus
+    await client.query(
+      `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
+      [winnerId, goldTransfer, xpBonus]
+    );
+    
+    // Loser loses gold (no XP loss in new system)
+    await client.query(
+      `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
+      [loserId, goldTransfer]
+    );
+    
+    // Update lifetime stats for winner
+    await client.query(
+      `UPDATE guilds SET 
+         lifetime_battles_won = lifetime_battles_won + 1,
+         lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
+         lifetime_battle_xp_won = lifetime_battle_xp_won + $3
+       WHERE id = $1`,
+      [winnerId, goldTransfer, xpBonus]
+    );
+    
+    // Update lifetime stats for loser
+    await client.query(
+      `UPDATE guilds SET 
+         lifetime_battles_lost = lifetime_battles_lost + 1,
+         lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
+       WHERE id = $1`,
+      [loserId, goldTransfer]
+    );
+    
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Failed to apply battle results, rolling back:', error);
+    throw error; // Re-throw so caller knows the battle failed
+  } finally {
+    client.release();
+  }
 }
 
 /**
  * Apply free revenge battle results
  * If defender wins: gets gold from attacker, attacker loses gold
  * If defender loses: nothing happens (free revenge has no cost)
+ * Uses a transaction to ensure atomic updates
  * @param {number} defenderId - Original defender's guild ID (counter-attacker)
  * @param {number} attackerId - Original attacker's guild ID (being counter-attacked)
  * @param {boolean} defenderWon - Whether the defender won the free revenge
@@ -366,46 +382,60 @@ export async function applyBattleResults(winnerId, loserId, goldTransfer, xpBonu
  * @param {number} xpBonus - XP bonus if defender wins
  */
 export async function applyFreeRevengeResults(defenderId, attackerId, defenderWon, goldReward, xpBonus) {
-  if (defenderWon) {
-    // Defender wins: gets gold and XP from attacker
-    await query(
-      `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
-      [defenderId, goldReward, xpBonus]
-    );
+  const client = await getClient();
+  
+  try {
+    await client.query('BEGIN');
     
-    await query(
-      `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
-      [attackerId, goldReward]
-    );
+    if (defenderWon) {
+      // Defender wins: gets gold and XP from attacker
+      await client.query(
+        `UPDATE guilds SET gold = gold + $2, xp = xp + $3 WHERE id = $1`,
+        [defenderId, goldReward, xpBonus]
+      );
+      
+      await client.query(
+        `UPDATE guilds SET gold = GREATEST(0, gold - $2) WHERE id = $1`,
+        [attackerId, goldReward]
+      );
+      
+      // Update lifetime stats
+      await client.query(
+        `UPDATE guilds SET 
+           lifetime_battles_won = lifetime_battles_won + 1,
+           lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
+           lifetime_battle_xp_won = lifetime_battle_xp_won + $3
+         WHERE id = $1`,
+        [defenderId, goldReward, xpBonus]
+      );
+      
+      await client.query(
+        `UPDATE guilds SET 
+           lifetime_battles_lost = lifetime_battles_lost + 1,
+           lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
+         WHERE id = $1`,
+        [attackerId, goldReward]
+      );
+    } else {
+      // Defender loses: nothing happens (free revenge), but still count as a loss
+      await client.query(
+        `UPDATE guilds SET lifetime_battles_lost = lifetime_battles_lost + 1 WHERE id = $1`,
+        [defenderId]
+      );
+      
+      await client.query(
+        `UPDATE guilds SET lifetime_battles_won = lifetime_battles_won + 1 WHERE id = $1`,
+        [attackerId]
+      );
+    }
     
-    // Update lifetime stats
-    await query(
-      `UPDATE guilds SET 
-         lifetime_battles_won = lifetime_battles_won + 1,
-         lifetime_battle_gold_won = lifetime_battle_gold_won + $2,
-         lifetime_battle_xp_won = lifetime_battle_xp_won + $3
-       WHERE id = $1`,
-      [defenderId, goldReward, xpBonus]
-    );
-    
-    await query(
-      `UPDATE guilds SET 
-         lifetime_battles_lost = lifetime_battles_lost + 1,
-         lifetime_battle_gold_lost = lifetime_battle_gold_lost + $2
-       WHERE id = $1`,
-      [attackerId, goldReward]
-    );
-  } else {
-    // Defender loses: nothing happens (free revenge), but still count as a loss
-    await query(
-      `UPDATE guilds SET lifetime_battles_lost = lifetime_battles_lost + 1 WHERE id = $1`,
-      [defenderId]
-    );
-    
-    await query(
-      `UPDATE guilds SET lifetime_battles_won = lifetime_battles_won + 1 WHERE id = $1`,
-      [attackerId]
-    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Failed to apply free revenge results, rolling back:', error);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
